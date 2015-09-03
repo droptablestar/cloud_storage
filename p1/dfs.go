@@ -1,4 +1,4 @@
-// memfs implements a simple in-memory file system.
+// memfs implements a simple in-memory file system.  v0.2
 package main
 
 /*
@@ -34,21 +34,21 @@ import (
 
 //=============================================================================
 
-type Node struct {
+type DFSNode struct {
 	nid   uint64
 	name  string
 	attr  fuse.Attr
 	dirty bool
-	kids  map[string]*Node
+	kids  map[string]*DFSNode
 	data  []uint8
 }
 
-var root *Node
+var root *DFSNode
 
 type FS struct{}
 
-//  Compile error if Node does not implement interface fs.Node, or if FS does not implement fs.FS
-var _ fs.Node = (*Node)(nil)
+//  Compile error if DFSNode does not implement interface fs.Node, or if FS does not implement fs.FS
+var _ fs.Node = (*DFSNode)(nil)
 var _ fs.FS = (*FS)(nil)
 
 //=============================================================================
@@ -68,19 +68,19 @@ func p_err(s string, args ...interface{}) {
 
 // Implement:
 //   func (FS) Root() (n fs.Node, err error)
-//   func (n *Node) Attr(ctx context.Context, attr *fuse.Attr) error
-//   func (n *Node) Lookup(ctx context.Context, name string) (fs.Node, error)
-//   func (n *Node) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error)
-//   func (n *Node) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error
-//   func (n *Node) Fsync(ctx context.Context, req *fuse.FsyncRequest) error
-//   func (n *Node) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error
-//   func (p *Node) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error)
-//   func (p *Node) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error)
-//   func (n *Node) ReadAll(ctx context.Context) ([]byte, error)
-//   func (n *Node) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error
-//   func (n *Node) Flush(ctx context.Context, req *fuse.FlushRequest) error
-//   func (n *Node) Remove(ctx context.Context, req *fuse.RemoveRequest) error
-//   func (n *Node) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error
+//   func (n *DFSNode) Attr(ctx context.Context, attr *fuse.Attr) error
+//   func (n *DFSNode) Lookup(ctx context.Context, name string) (fs.Node, error)
+//   func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error)
+//   func (n *DFSNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error
+//   func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error
+//   func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error
+//   func (p *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error)
+//   func (p *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error)
+//   func (n *DFSNode) ReadAll(ctx context.Context) ([]byte, error)
+//   func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error
+//   func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error
+//   func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error
+//   func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error
 
 //=============================================================================
 
@@ -101,7 +101,7 @@ func main() {
 
 	p_out("main\n")
 
-	root = new(Node)
+	root = new(DFSNode)
 	root.init("", os.ModeDir|0755)
 
 	nodeMap[uint64(root.attr.Inode)] = root
