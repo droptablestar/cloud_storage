@@ -77,7 +77,7 @@ func (d *DFSNode) init(name string, mode os.FileMode) {
 		Gid:    20,
 	}
 	d.kids = make(map[string]*DFSNode)
-	// d.data = new([]uint8)
+	d.data = make([]uint8, 64)
 }
 
 type FS struct{}
@@ -86,7 +86,7 @@ var root *DFSNode
 
 // Implement:
 func (FS) Root() (fs.Node, error) {
-	p_out("Root\n")
+	root.attr.Size = 64
 	return root, nil
 }
 func (n *DFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
@@ -103,6 +103,7 @@ func (n *DFSNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *f
 
 func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	p_out("Setattr\nn: %#v \nreq: %#v\n\n", n, req)
+	n.attr.Size = req.Size
 	return nil
 }
 
@@ -131,15 +132,10 @@ func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, e
 	return d, nil
 }
 
-func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
-	p_out("Fsync\n\n")
-	return nil
-}
-
 func (p *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
 	p_out("Create: \nreq: %#v\n\n", req)
 	f := new(DFSNode)
-	f.init(req.Name, req.Mode)
+	f.init(req.Name, 0666)
 	p.kids[req.Name] = f
 	p_out("f: %#v\n\n", f)
 	return f, f, nil
@@ -148,14 +144,12 @@ func (p *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fus
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	p_out("Write: \nreq: %#v\n: %#v\n\n", req, n)
 	if int64(len(n.data)) < req.Offset {
-		n.data = make([]uint8, req.Offset+int64(len(req.Data)))
+		n.data = make([]uint8, int8(req.Offset)+int8(len(req.Data)))
 	}
-	copy(n.data[req.Offset:], req.Data)
-	fmt.Println(req.Data)
-	fmt.Println(n.data)
-	n.attr.Size = uint64(len(n.data))
-	n.dirty = true
-	p_out("Write: \nreq: %#v\n: n%#v\n\n", req, n)
+	resp.Size = copy(n.data[req.Offset:], req.Data)
+	n.attr.Size = uint64(resp.Size)
+	// n.dirty = true
+	p_out("n: %#v\n\n", n)
 	return nil
 }
 
@@ -164,19 +158,25 @@ func (n *DFSNode) ReadAll(ctx context.Context) ([]byte, error) {
 	return n.data, nil
 }
 
+func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
+	p_out("Fsync\n\n")
+	return nil
+}
+
 func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	p_out("Flush: \n:%#v \nn: %#v\n\n", req, n)
 	return nil
 }
 
-// func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-// 	fmt.Printf("Remove\n\n")
-// 	return nil
-// }
-// func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-// 	fmt.Printf("Rename\n\n")
-// 	return nil
-// }
+func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
+	p_out("Remove\n\n")
+	return nil
+}
+
+func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
+	p_out("Rename\n\n")
+	return nil
+}
 
 //=============================================================================
 
@@ -199,6 +199,7 @@ func main() {
 
 	root = new(DFSNode)
 	root.init("", os.ModeDir|0755)
+	// root.attr.Size = 64
 
 	// nodeMap[uint64(root.attr.Inode)] = root
 	p_out("root inode %d\n", int(root.attr.Inode))
