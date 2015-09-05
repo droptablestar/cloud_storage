@@ -77,7 +77,7 @@ func (d *DFSNode) init(name string, mode os.FileMode) {
 		Gid:    20,
 	}
 	d.kids = make(map[string]*DFSNode)
-	d.data = make([]uint8, 64)
+	d.data = make([]uint8, 0)
 }
 
 type FS struct{}
@@ -90,20 +90,33 @@ func (FS) Root() (fs.Node, error) {
 	return root, nil
 }
 func (n *DFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
-	p_out("Attr: \n%#v\nattr: %#v\n\n", n, attr)
+	// p_out("Attr: \n%#v\nattr: %#v\n\n", n, attr)
 	*attr = n.attr
 	return nil
 }
 
 func (n *DFSNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error {
-	p_out("Getattr:\nn: %#v \nreq: %#v\nresp:%#v\n\n", n, req, resp)
+	// p_out("Getattr:\nn: %#v \nreq: %#v\nresp:%#v\n\n", n, req, resp)
 	resp.Attr = n.attr
 	return nil
 }
 
 func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
-	p_out("Setattr\nn: %#v \nreq: %#v\n\n", n, req)
-	n.attr.Size = req.Size
+	// p_out("Setattr\nn: %#v \nreq: %#v\n\n", n, req)
+	switch {
+	case req.Valid == fuse.SetattrMode:
+		n.attr.Mode = req.Mode
+	case req.Valid == fuse.SetattrUid:
+		n.attr.Uid = req.Uid
+	case req.Valid == fuse.SetattrGid:
+		n.attr.Gid = req.Gid
+	case req.Valid == fuse.SetattrSize:
+		n.attr.Size = req.Size
+	case req.Valid == fuse.SetattrAtime:
+		n.attr.Atime = req.Atime
+	case req.Valid == fuse.SetattrMtime:
+		n.attr.Mtime = req.Mtime
+	}
 	return nil
 }
 
@@ -116,7 +129,7 @@ func (n *DFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 }
 
 func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	fmt.Printf("ReadDirAll: %#v\n\n", n)
+	// fmt.Printf("ReadDirAll: %#v\n\n", n)
 	var dirDirs = []fuse.Dirent{}
 	for _, val := range n.kids {
 		dirDirs = append(dirDirs, fuse.Dirent{Inode: val.nid, Type: fuse.DT_Dir, Name: val.name})
@@ -135,31 +148,29 @@ func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, e
 func (p *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
 	p_out("Create: \nreq: %#v\n\n", req)
 	f := new(DFSNode)
-	f.init(req.Name, 0666)
+	f.init(req.Name, req.Mode)
 	p.kids[req.Name] = f
-	p_out("f: %#v\n\n", f)
 	return f, f, nil
 }
 
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	p_out("Write: \nreq: %#v\n: %#v\n\n", req, n)
-	if int64(len(n.data)) < req.Offset {
-		n.data = make([]uint8, int8(req.Offset)+int8(len(req.Data)))
-	}
-	resp.Size = copy(n.data[req.Offset:], req.Data)
+	p_out("Write: \nreq: %q\nn: %\n", req, n)
+	t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data)))
+	copy(t, n.data)
+	resp.Size = copy(t[req.Offset:], req.Data)
+	n.data = t
 	n.attr.Size = uint64(resp.Size)
-	// n.dirty = true
-	p_out("n: %#v\n\n", n)
+	// n.dirty = true   TODO: Does this matter?
 	return nil
 }
 
 func (n *DFSNode) ReadAll(ctx context.Context) ([]byte, error) {
-	p_out("ReadAll: \nn:%#v\n\n", n)
+	// p_out("ReadAll: \nn:%#v\n\n", n)
 	return n.data, nil
 }
 
 func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
-	p_out("Fsync\n\n")
+	// p_out("Fsync\n\n")
 	return nil
 }
 
@@ -169,13 +180,28 @@ func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 }
 
 func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-	p_out("Remove\n\n")
-	return nil
+	p_out("Remove: \nreq: %#v\nn:%#v\n\n", req, n)
+	if _, ok := n.kids[req.Name]; ok {
+		for name, _ := range n.kids[req.Name].kids {
+			p_out("removing %s from %#v\n", name, n.kids[req.Name])
+			n.kids[req.Name].Remove(ctx, &fuse.RemoveRequest{req.Header, name, true})
+		}
+		p_out("deleting: %s from n.kids: %#v\n", req.Name, n.kids)
+		delete(n.kids, req.Name)
+		return nil
+	}
+	return fuse.ENOENT
 }
 
 func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-	p_out("Rename\n\n")
-	return nil
+	p_out("Rename: \nreq: %#v\n \nn: %#v \nnew: %#v\n\n", req, n, newDir)
+	if _, ok := n.kids[req.OldName]; ok {
+		n.kids[req.OldName].name = req.NewName
+		n.kids[req.NewName] = n.kids[req.OldName]
+		delete(n.kids, req.OldName)
+		return nil
+	}
+	return fuse.ENOENT
 }
 
 //=============================================================================
