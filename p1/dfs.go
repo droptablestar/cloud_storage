@@ -60,67 +60,100 @@ type DFSNode struct {
 	data  []uint8
 }
 
-var root *DFSNode
-
 type FS struct{}
 
+var root *DFSNode
+
 // Implement:
-func (FS) Root() (n fs.Node, err error) {
+func (FS) Root() (fs.Node, error) {
 	fmt.Println("HERE")
-	// n = DFSNode{name: "/", attr: fuse.Attr{Mode: os.ModeDir | 0755}, dirty: false}
+	root = &DFSNode{
+		name: "rt",
+		kids: make(map[string]*DFSNode),
+		attr: fuse.Attr{Mode: os.ModeDir | 0755},
+	}
+	return root, nil
+	// return &DFSNode{1, "/", attr: fuse.Attr{Mode: os.ModeDir | 0755}, dirty: false}
 	// n.kids = make(map[string]*DFSNode{mountpoint: root})
 	// n.data = new([]uint8, 64)
-	root = new(DFSNode)
-	root.name = "/"
-	root.kids = make(map[string]*DFSNode)
-	root.data = make([]uint8, 64)
-	return root, nil
+	// root = new(DFSNode)
+	// root.name = "/"
+	// root.kids = make(map[string]*DFSNode)
+	// root.data = make([]uint8, 64)
+	// fmt.Printf("Root: %#v\n\n", root)
 }
-func (DFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
-	attr.Inode = 1
-	attr.Mode = os.ModeDir | 0555
+func (n *DFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
+	fmt.Printf("Attr: %#v\n\n", n)
+	attr.Inode = 0
+	attr.Mode = os.ModeDir | 0755
 	return nil
 }
 
 func (n *DFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	return n, nil
+	fmt.Printf("Lookup: name: %s - %#v\n\n", name, n)
+	if val, ok := n.kids[name]; ok {
+		return val, nil
+	}
+	return nil, fuse.ENOENT
 }
 
 func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	return []fuse.Dirent{}, nil
-}
-func (n *DFSNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error {
-	return nil
-}
-func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
-	return nil
-}
-func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
-	return nil
-}
-func (p *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
-	return DFSNode{}, nil
+	fmt.Printf("ReadDirAll: %#v\n\n", n)
+	var dirDirs = []fuse.Dirent{}
+	for _, val := range n.kids {
+		dirDirs = append(dirDirs, fuse.Dirent{Inode: val.nid, Type: fuse.DT_Dir, Name: val.name})
+	}
+	return dirDirs, nil
 }
 
-func (p *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
-	return DFSNode{}, DFSNode{}, nil
+// func (n *DFSNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error {
+// 	fmt.Printf("Getattr: req: %#v\n\n", req)
+// 	return nil
+// }
+
+// func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
+// 	fmt.Printf("Fsync\n\n")
+// 	return nil
+// }
+// func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+// 	fmt.Printf("Setattr\n\n")
+// 	return nil
+// }
+func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
+	fmt.Printf("Mkdir: %#v\n\n", n)
+	if _, ok := n.kids[req.Name]; ok {
+		return nil, fuse.EIO
+	}
+	node := &DFSNode{name: req.Name, kids: make(map[string]*DFSNode), attr: fuse.Attr{Mode: os.ModeDir | 0755}}
+	n.kids[req.Name] = node
+	return node, nil
 }
 
-func (n *DFSNode) ReadAll(ctx context.Context) ([]byte, error) {
-	return []byte("HELLO"), nil
-}
-func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	return nil
-}
-func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
-	return nil
-}
-func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-	return nil
-}
-func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-	return nil
-}
+// func (p *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
+// 	fmt.Printf("Create\n\n")
+// 	return nil, nil, nil
+// }
+
+// func (n *DFSNode) ReadAll(ctx context.Context) ([]byte, error) {
+// 	fmt.Printf("ReadAll\n\n")
+// 	return []byte("HELLO"), nil
+// }
+// func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
+// 	fmt.Printf("Write\n\n")
+// 	return nil
+// }
+// func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
+// 	fmt.Printf("Flush\n\n")
+// 	return nil
+// }
+// func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
+// 	fmt.Printf("Remove\n\n")
+// 	return nil
+// }
+// func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
+// 	fmt.Printf("Rename\n\n")
+// 	return nil
+// }
 
 //=============================================================================
 
@@ -134,11 +167,9 @@ var debug bool
 var mountpoint string
 
 func main() {
-	fmt.Println("HELLO")
-
 	flag.Usage = Usage
 	flag.BoolVar(&debug, "debug", true, "debugging")
-	flag.StringVar(&mountpoint, "mount", "/tmp/dss", "defaults to local '/tmp/dss'")
+	flag.StringVar(&mountpoint, "mount", "dss", "defaults to local 'dss'")
 	flag.Parse()
 
 	p_out("main\n")
@@ -164,7 +195,6 @@ func main() {
 	defer c.Close()
 
 	err = fs.Serve(c, FS{})
-	fmt.Printf("%#v\n", root)
 	if err != nil {
 		log.Fatal(err)
 	}
