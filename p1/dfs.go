@@ -1,6 +1,12 @@
 // memfs implements a simple in-memory file system.  v0.2A
 package main
 
+/* NOTES:
+
+
+
+ */
+
 import (
 	"flag"
 	"fmt"
@@ -42,6 +48,8 @@ type DFSNode struct {
 }
 
 var ID uint64 = 0
+var uid uint32 = uint32(os.Getuid())
+var gid uint32 = uint32(os.Getgid())
 
 func (d *DFSNode) init(name string, mode os.FileMode) {
 	p_out("init: %q with name: %q and mode: %#X\n", d, name, mode)
@@ -64,8 +72,8 @@ func (d *DFSNode) init(name string, mode os.FileMode) {
 		Crtime: startTime,
 		Mode:   mode,
 		Nlink:  1,
-		Uid:    501, // My Uid and Gid
-		Gid:    20,
+		Uid:    uid,
+		Gid:    gid,
 	}
 	d.kids = make(map[string]*DFSNode)
 	d.data = make([]uint8, 0)
@@ -134,6 +142,8 @@ func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, e
 	d := new(DFSNode)
 	d.init(req.Name, req.Mode)
 	n.kids[req.Name] = d
+	n.attr.Uid = req.Header.Uid
+	n.attr.Gid = req.Header.Uid
 	return d, nil
 }
 
@@ -142,8 +152,12 @@ func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	p_out("readdirall for %q\n", n.name)
 	var dirDirs = []fuse.Dirent{}
 	for _, val := range n.kids {
+		typ := fuse.DT_File
+		if os.ModeDir&val.attr.Mode == os.ModeDir {
+			typ = fuse.DT_Dir
+		}
 		dirDirs = append(dirDirs,
-			fuse.Dirent{Inode: val.attr.Inode, Type: fuse.DT_Dir, Name: val.name})
+			fuse.Dirent{Inode: val.attr.Inode, Type: typ, Name: val.name})
 	}
 	p_out("dirs: %q\n\n", dirDirs)
 	return dirDirs, nil
@@ -190,24 +204,43 @@ func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	p_out("remove %q from \n%q \n\n", req, n)
 	// If the DFSNode exists...delete it.
 	if _, ok := n.kids[req.Name]; ok {
-		p_out("deleting: %q from n.kids: %#v\n\n", req.Name, n.kids)
 		delete(n.kids, req.Name)
 		return nil
 	}
 	return fuse.ENOENT
 }
 
+func (n *DFSNode) findId(nodeID uint64) (*DFSNode, bool) {
+	for _, val := range n.kids {
+		if val.attr.Inode == nodeID {
+			return val, true
+		}
+		return val.findId(nodeID)
+	}
+	return nil, false
+}
+
 func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-	p_out("Rename: \nreq: %q \n\nn: %q \nnew: %q\n\n", req, n, newDir)
-	// copy new name to old name
-	// point new data to old data
-	// remove old data key from map
-	if _, ok := n.kids[req.OldName]; ok {
-		n.kids[req.OldName].name = req.NewName
-		n.kids[req.NewName] = n.kids[req.OldName]
+	p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
+	if rn, ok := n.findId(uint64(req.NewDir)); ok {
+		rn.kids[req.NewName] = n.kids[req.OldName]
+		p_out("rn: %q\n", rn)
 		delete(n.kids, req.OldName)
 		return nil
 	}
+	// old := n.kids[req.OldName]
+	// *newDir.kids["a"] = new(DFSNode)
+	// n.nid = req.NewDir
+	// copy new name to old name
+	// point new data to old data
+	// remove old data key from map
+	// if _, ok := n.kids[req.OldName]; ok {
+	// n.kids[req.OldName].name = req.NewName
+	// n.kids[req.NewName] = n.kids[req.OldName]
+	// n.kids[req.NewName] = newDir
+	// delete(n.kids, req.OldName)
+	// return nil
+	// }
 	return fuse.ENOENT
 }
 
