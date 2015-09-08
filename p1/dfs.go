@@ -64,7 +64,7 @@ type DFSNode struct {
 }
 
 func (d *DFSNode) init(name string, mode os.FileMode) {
-	// p_out("init: %q with name: %q and mode: %#X\n", d, name, mode, mode)
+	p_out("init: %q with name: %q and mode: %#X\n", d, name, mode)
 	// had some isssues with dir's that were initially 0B size
 	var size uint64 = 0
 	if os.ModeDir&mode == os.ModeDir {
