@@ -52,8 +52,6 @@ func p_err(s string, args ...interface{}) {
 var _ fs.Node = (*DFSNode)(nil)
 var _ fs.FS = (*FS)(nil)
 
-var startTime = time.Now()
-
 type DFSNode struct {
 	nid   uint64
 	name  string
@@ -63,16 +61,22 @@ type DFSNode struct {
 	data  []uint8
 }
 
+var ID uint64 = 0
+
 func (d *DFSNode) init(name string, mode os.FileMode) {
 	p_out("init: %q with name: %q and mode: %#X\n", d, name, mode)
 	// had some isssues with dir's that were initially 0B size
+	startTime := time.Now()
 	var size uint64 = 0
 	if os.ModeDir&mode == os.ModeDir {
 		size = 64
 	}
+	ID += 1
 	d.name = name
+	d.nid = ID
 	d.attr = fuse.Attr{
 		Valid:  1 * time.Minute,
+		Inode:  ID,
 		Size:   size,
 		Atime:  startTime,
 		Mtime:  startTime,
@@ -80,7 +84,7 @@ func (d *DFSNode) init(name string, mode os.FileMode) {
 		Crtime: startTime,
 		Mode:   mode,
 		Nlink:  1,
-		Uid:    501,
+		Uid:    501, // My Uid and Gid
 		Gid:    20,
 	}
 	d.kids = make(map[string]*DFSNode)
