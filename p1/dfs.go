@@ -1,10 +1,6 @@
 // memfs implements a simple in-memory file system.  v0.2A
 package main
 
-/*
- Two main files are ../fuse.go and ../fs/serve.go
-*/
-
 import (
 	"flag"
 	"fmt"
@@ -20,6 +16,7 @@ import (
 
 //=============================================================================
 
+// Debugging outputs
 func p_out(s string, args ...interface{}) {
 	if !debug {
 		return
@@ -31,23 +28,6 @@ func p_err(s string, args ...interface{}) {
 	fmt.Printf(s, args...)
 }
 
-//=============================================================================
-/*
-    Need to implement these types from bazil/fuse/fs!
-
-    type FS interface {
-	  // Root is called to obtain the Node for the file system root.
-
-	  Root() (Node, error)
-    }
-
-    type Node interface {
-	  // Attr fills attr with the standard metadata for the node.
-	  Attr(ctx context.Context, attr *fuse.Attr) error
-    }
-*/
-
-//=============================================================================
 //  Compile error if DFSNode does not implement interface fs.Node, or if FS does not implement fs.FS
 var _ fs.Node = (*DFSNode)(nil)
 var _ fs.FS = (*FS)(nil)
@@ -100,11 +80,11 @@ type FS struct{}
 
 var root *DFSNode
 
-// Implement:
 func (FS) Root() (fs.Node, error) {
 	root.attr.Inode = 1
 	return root, nil
 }
+
 func (n *DFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	p_out("attr %q <- \n%q\n\n", attr, n)
 	*attr = n.attr
@@ -119,6 +99,10 @@ func (n *DFSNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *f
 
 func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	p_out("attr for %q in \n%q\n\n", req, n)
+	// Setattr() should only be allowed to modify particular parts of a
+	// nodes attributes. TODO: Is switch the best option here? Could
+	// a request change multiple values (i.e. could more than one of these
+	// be true?
 	switch {
 	case req.Valid == fuse.SetattrMode:
 		n.attr.Mode = req.Mode
@@ -144,6 +128,7 @@ func (n *DFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	return nil, fuse.ENOENT
 }
 
+// Cut and paste :-P
 func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
 	p_out("mkdir %q in \n%q\n\n", req, n.name)
 	d := new(DFSNode)
@@ -152,6 +137,7 @@ func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, e
 	return d, nil
 }
 
+// TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	p_out("readdirall for %q\n", n.name)
 	var dirDirs = []fuse.Dirent{}
@@ -173,6 +159,9 @@ func (p *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fus
 
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	p_out("write req: %q\nin %q\n\n", req, n)
+	// make sure there is room for whatever data is already there, whatever
+	// crazy offset the write might be using, and the amount of new data
+	// being written
 	t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data)))
 	copy(t, n.data)
 	resp.Size = copy(t[req.Offset:], req.Data)
@@ -198,7 +187,8 @@ func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 }
 
 func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-	fmt.Printf("remove %q from \n%q \n\n", req, n)
+	p_out("remove %q from \n%q \n\n", req, n)
+	// If the DFSNode exists...delete it.
 	if _, ok := n.kids[req.Name]; ok {
 		p_out("deleting: %q from n.kids: %#v\n\n", req.Name, n.kids)
 		delete(n.kids, req.Name)
@@ -209,6 +199,9 @@ func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 
 func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
 	p_out("Rename: \nreq: %q \n\nn: %q \nnew: %q\n\n", req, n, newDir)
+	// copy new name to old name
+	// point new data to old data
+	// remove old data key from map
 	if _, ok := n.kids[req.OldName]; ok {
 		n.kids[req.OldName].name = req.NewName
 		n.kids[req.NewName] = n.kids[req.OldName]
