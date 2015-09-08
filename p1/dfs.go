@@ -215,7 +215,9 @@ func (n *DFSNode) findId(nodeID uint64) (*DFSNode, bool) {
 		if val.attr.Inode == nodeID {
 			return val, true
 		}
-		return val.findId(nodeID)
+		if rn, ok := val.findId(nodeID); ok {
+			return rn, true
+		}
 	}
 	return nil, false
 }
@@ -228,19 +230,6 @@ func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs
 		delete(n.kids, req.OldName)
 		return nil
 	}
-	// old := n.kids[req.OldName]
-	// *newDir.kids["a"] = new(DFSNode)
-	// n.nid = req.NewDir
-	// copy new name to old name
-	// point new data to old data
-	// remove old data key from map
-	// if _, ok := n.kids[req.OldName]; ok {
-	// n.kids[req.OldName].name = req.NewName
-	// n.kids[req.NewName] = n.kids[req.OldName]
-	// n.kids[req.NewName] = newDir
-	// delete(n.kids, req.OldName)
-	// return nil
-	// }
 	return fuse.ENOENT
 }
 
