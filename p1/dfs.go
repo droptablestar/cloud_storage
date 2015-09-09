@@ -2,9 +2,9 @@
 package main
 
 /* NOTES:
-
-
-
+ *
+ *  redis compiled on OS X successfully 9/8/15 - 22:06
+ *
  */
 
 import (
@@ -180,17 +180,19 @@ func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fus
 }
 
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
+	// req.Offset = 200
 	p_out("write req: %q\nin %q\n\n", req, n)
 	// make sure there is room for whatever data is already there, whatever
 	// crazy offset the write might be using, and the amount of new data
 	// being written
-	t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data))+1)
-	// t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data))+1)
+	t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data)))
 	copy(t, n.data)
 	resp.Size = copy(t[req.Offset:], req.Data)
+	p_out("resp.Size: %d, len(t): %d\n", resp.Size, len(t))
 	n.data = t
-	n.attr.Size = uint64(resp.Size)
-	// n.dirty = true   TODO: Does this matter?
+	n.attr.Size = uint64(len(t))
+	// n.attr.Size = uint64(resp.Size)
+	// n.dirty = true // TODO: Does this matter?
 	return nil
 }
 
