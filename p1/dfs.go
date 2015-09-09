@@ -1,11 +1,17 @@
 // memfs implements a simple in-memory file system.  v0.2A
 package main
 
-/* NOTES:
- *
- *  redis compiled on OS X successfully 9/8/15 - 22:06
- *
- */
+// NOTES:
+//
+//  redis compiled on OS X successfully 9/8/15 - 22:06
+//
+//  Thoughts on why flush() is called multiple times:
+//  The documentation (if that's what we want to call it) for HandleFlusher()
+//  says, "Flush is called each time the file or directory is closed". My
+//  thought is that we open the directory when we write (or copy) the file into
+//  it, then to copy the file out we need to open the directory again to modify
+//  the contents of the directory to reflect that the file is no longer there.
+//  Not sure if that is what's actually happening...
 
 import (
 	"flag"
@@ -245,6 +251,20 @@ func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs
 		return nil
 	}
 	return fuse.ENOENT
+}
+
+func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
+	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
+	return nil, nil
+}
+
+func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
+	return "", nil
+}
+func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
+	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
+	return nil, nil
 }
 
 //=============================================================================
