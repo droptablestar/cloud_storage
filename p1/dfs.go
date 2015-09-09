@@ -4,6 +4,7 @@ package main
 // NOTES:
 //
 //  redis compiled on OS X successfully 9/8/15 - 22:06
+//  redis compiled on OS X successfully 9/9/15 - 17:12 - Changes to Rename()
 //
 //  Thoughts on why flush() is called multiple times:
 //  The documentation (if that's what we want to call it) for HandleFlusher()
@@ -186,18 +187,18 @@ func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fus
 }
 
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	// req.Offset = 200
 	p_out("write req: %q\nin %q\n\n", req, n)
 	// make sure there is room for whatever data is already there, whatever
 	// crazy offset the write might be using, and the amount of new data
 	// being written
 	t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data)))
 	copy(t, n.data)
+	// the size we return needs to be the size of the data we copied, but
+	// the size of the file might be different because of this wonky
+	// offset
 	resp.Size = copy(t[req.Offset:], req.Data)
-	p_out("resp.Size: %d, len(t): %d\n", resp.Size, len(t))
 	n.data = t
 	n.attr.Size = uint64(len(t))
-	// n.attr.Size = uint64(resp.Size)
 	// n.dirty = true // TODO: Does this matter?
 	return nil
 }
@@ -227,26 +228,11 @@ func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	return fuse.ENOENT
 }
 
-func (n *DFSNode) findId(nodeID uint64) (*DFSNode, bool) {
-	if n.attr.Inode == nodeID {
-		return n, true
-	}
-	for _, val := range n.kids {
-		if val.attr.Inode == nodeID {
-			return val, true
-		}
-		if rn, ok := val.findId(nodeID); ok {
-			return rn, true
-		}
-	}
-	return nil, false
-}
-
 func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
 	p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
-	if rn, ok := root.findId(uint64(req.NewDir)); ok {
-		rn.kids[req.NewName] = n.kids[req.OldName]
-		p_out("rn: %q\n", rn)
+	if outDir, ok := newDir.(*DFSNode); ok {
+		n.kids[req.OldName].name = req.NewName
+		outDir.kids[req.NewName] = n.kids[req.OldName]
 		delete(n.kids, req.OldName)
 		return nil
 	}
