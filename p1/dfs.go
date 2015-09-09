@@ -49,7 +49,7 @@ type DFSNode struct {
 
 var ID uint64 = 0
 var uid uint32 = uint32(os.Getuid())
-var gid uint32 = uint32(os.Getgid())
+var gid uint32 = uint32(os.Getegid())
 
 func (d *DFSNode) init(name string, mode os.FileMode) {
 	p_out("init: %q with name: %q and mode: %#X\n", d, name, mode)
@@ -76,12 +76,13 @@ func (d *DFSNode) init(name string, mode os.FileMode) {
 		Gid:    gid,
 	}
 	d.kids = make(map[string]*DFSNode)
-	d.data = make([]uint8, 0)
 }
 
 func (d *DFSNode) String() string {
-	return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v, data: %s\n",
-		d.nid, d.name, d.attr, d.dirty, d.kids, d.data)
+	// return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v, data: %s\n",
+	// 	d.nid, d.name, d.attr, d.dirty, d.kids, d.data)
+	return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v\n",
+		d.nid, d.name, d.attr, d.dirty, d.kids)
 }
 
 type FS struct{}
@@ -111,25 +112,32 @@ func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	// nodes attributes. TODO: Is switch the best option here? Could
 	// a request change multiple values (i.e. could more than one of these
 	// be true?
-	switch {
-	case req.Valid == fuse.SetattrMode:
-		n.attr.Mode = req.Mode
-	case req.Valid == fuse.SetattrUid:
-		n.attr.Uid = req.Uid
-	case req.Valid == fuse.SetattrGid:
-		n.attr.Gid = req.Gid
-	case req.Valid == fuse.SetattrSize:
+	if req.Valid.Size() {
 		n.attr.Size = req.Size
-	case req.Valid == fuse.SetattrAtime:
+	}
+	if req.Valid.Atime() {
 		n.attr.Atime = req.Atime
-	case req.Valid == fuse.SetattrMtime:
+	}
+	if req.Valid.Mtime() {
 		n.attr.Mtime = req.Mtime
+	}
+	if req.Valid.Mode() {
+		n.attr.Mode = req.Mode
+	}
+	if req.Valid.Gid() {
+		n.attr.Size = req.Size
+	}
+	if req.Valid.Uid() {
+		n.attr.Uid = req.Uid
+	}
+	if req.Valid.Gid() {
+		n.attr.Gid = req.Gid
 	}
 	return nil
 }
 
 func (n *DFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	// p_out("lookup for %q in \n%q\n", name, n)
+	// p_out("lookup for %q in \n%q\n\n", name, n)
 	if child, ok := n.kids[name]; ok {
 		return child, nil
 	}
@@ -142,8 +150,8 @@ func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, e
 	d := new(DFSNode)
 	d.init(req.Name, req.Mode)
 	n.kids[req.Name] = d
-	n.attr.Uid = req.Header.Uid
-	n.attr.Gid = req.Header.Uid
+	// n.attr.Uid = req.Header.Uid
+	// n.attr.Gid = req.Header.Uid
 	return d, nil
 }
 
@@ -163,11 +171,11 @@ func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	return dirDirs, nil
 }
 
-func (p *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
-	p_out("create req: %q\n\n", req)
+func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
+	p_out("create req: %q \nin %q\n", req, n)
 	f := new(DFSNode)
 	f.init(req.Name, req.Mode)
-	p.kids[req.Name] = f
+	n.kids[req.Name] = f
 	return f, f, nil
 }
 
@@ -176,7 +184,8 @@ func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.
 	// make sure there is room for whatever data is already there, whatever
 	// crazy offset the write might be using, and the amount of new data
 	// being written
-	t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data)))
+	t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data))+1)
+	// t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data))+1)
 	copy(t, n.data)
 	resp.Size = copy(t[req.Offset:], req.Data)
 	n.data = t
@@ -211,6 +220,9 @@ func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 }
 
 func (n *DFSNode) findId(nodeID uint64) (*DFSNode, bool) {
+	if n.attr.Inode == nodeID {
+		return n, true
+	}
 	for _, val := range n.kids {
 		if val.attr.Inode == nodeID {
 			return val, true
@@ -224,7 +236,7 @@ func (n *DFSNode) findId(nodeID uint64) (*DFSNode, bool) {
 
 func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
 	p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
-	if rn, ok := n.findId(uint64(req.NewDir)); ok {
+	if rn, ok := root.findId(uint64(req.NewDir)); ok {
 		rn.kids[req.NewName] = n.kids[req.OldName]
 		p_out("rn: %q\n", rn)
 		delete(n.kids, req.OldName)
