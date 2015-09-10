@@ -193,12 +193,9 @@ func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.
 	// being written
 	t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data)))
 	copy(t, n.data)
-	// the size we return needs to be the size of the data we copied, but
-	// the size of the file might be different because of this wonky
-	// offset
 	resp.Size = copy(t[req.Offset:], req.Data)
 	n.data = t
-	n.attr.Size = uint64(len(t))
+	n.attr.Size = uint64(len(n.data))
 	// n.dirty = true // TODO: Does this matter?
 	return nil
 }
@@ -215,6 +212,10 @@ func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
 
 func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	p_out("flush %q \nin %q\n\n", req, n)
+	// if n.dirty {
+	// 	n.attr.Atime = time.Now()
+	// 	n.attr.Mtime = n.attr.Atime
+	// }
 	return nil
 }
 
