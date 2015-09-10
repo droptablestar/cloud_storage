@@ -63,7 +63,7 @@ func (d *DFSNode) init(name string, mode os.FileMode) {
 	// had some isssues with dir's that were initially 0B size
 	startTime := time.Now()
 	var size uint64 = 0
-	if os.ModeDir&mode == os.ModeDir {
+	if mode.IsDir() {
 		size = 64
 	}
 	ID += 1
@@ -116,9 +116,16 @@ func (n *DFSNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *f
 func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	p_out("attr for %q in \n%q\n\n", req, n)
 	// Setattr() should only be allowed to modify particular parts of a
-	// nodes attributes. TODO: Is switch the best option here? Could
-	// a request change multiple values (i.e. could more than one of these
-	// be true?
+	// nodes attributes.
+	if req.Valid.Mode() {
+		n.attr.Mode = req.Mode
+	}
+	if req.Valid.Uid() {
+		n.attr.Uid = req.Uid
+	}
+	if req.Valid.Gid() {
+		n.attr.Gid = req.Gid
+	}
 	if req.Valid.Size() {
 		n.attr.Size = req.Size
 	}
@@ -128,18 +135,31 @@ func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	if req.Valid.Mtime() {
 		n.attr.Mtime = req.Mtime
 	}
-	if req.Valid.Mode() {
-		n.attr.Mode = req.Mode
+	if req.Valid.Flags() {
+		n.attr.Flags = req.Flags
 	}
-	if req.Valid.Gid() {
-		n.attr.Size = req.Size
-	}
-	if req.Valid.Uid() {
-		n.attr.Uid = req.Uid
-	}
-	if req.Valid.Gid() {
-		n.attr.Gid = req.Gid
-	}
+	// if req.Valid.Handle() {
+	// 	n.attr.Handle = req.Handle
+	// }
+	// if req.Valid.AtimeNow() {
+	// 	return fl&SetattrAtimeNow != 0
+	// }
+	// if req.Valid.MtimeNow() {
+	// 	return fl&SetattrMtimeNow != 0
+	// }
+	// if req.Valid.LockOwner() {
+	// 	return fl&SetattrLockOwner != 0
+	// }
+	// if req.Valid.Crtime() {
+	// 	return fl&SetattrCrtime != 0
+	// }
+	// if req.Valid.Chgtime() {
+	// 	return fl&SetattrChgtime != 0
+	// }
+	// if req.Valid.Bkuptime() {
+	// 	return fl&SetattrBkuptime != 0
+	// }
+	resp.Attr = n.attr
 	return nil
 }
 
@@ -196,7 +216,7 @@ func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.
 	resp.Size = copy(t[req.Offset:], req.Data)
 	n.data = t
 	n.attr.Size = uint64(len(n.data))
-	// n.dirty = true // TODO: Does this matter?
+	n.dirty = true // TODO: Does this matter?
 	return nil
 }
 
@@ -212,10 +232,10 @@ func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
 
 func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	p_out("flush %q \nin %q\n\n", req, n)
-	// if n.dirty {
-	// 	n.attr.Atime = time.Now()
-	// 	n.attr.Mtime = n.attr.Atime
-	// }
+	if n.dirty {
+		n.attr.Atime = time.Now()
+		n.attr.Mtime = time.Now()
+	}
 	return nil
 }
 
