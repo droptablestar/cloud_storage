@@ -215,8 +215,9 @@ func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.
 	copy(t, n.data)
 	resp.Size = copy(t[req.Offset:], req.Data)
 	n.data = t
-	n.attr.Size = uint64(len(n.data))
-	n.dirty = true // TODO: Does this matter?
+	n.attr.Size = uint64(len(t))
+	n.dirty = true
+
 	return nil
 }
 
