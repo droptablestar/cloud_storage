@@ -3,8 +3,7 @@ package main
 
 // NOTES:
 //
-//  redis compiled on OS X successfully 9/8/15 - 22:06
-//  redis compiled on OS X successfully 9/9/15 - 17:12 - Changes to Rename()
+//  redis compiled on OS X successfully 9/10/15 - 13:154
 //
 //  Thoughts on why flush() is called multiple times:
 //  The documentation (if that's what we want to call it) for HandleFlusher()
@@ -135,6 +134,12 @@ func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	if req.Valid.Mtime() {
 		n.attr.Mtime = req.Mtime
 	}
+	if req.Valid.Chgtime() {
+		n.attr.Crtime = req.Crtime
+	}
+	if req.Valid.Crtime() {
+		n.attr.Crtime = req.Crtime
+	}
 	if req.Valid.Flags() {
 		n.attr.Flags = req.Flags
 	}
@@ -150,16 +155,11 @@ func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	// if req.Valid.LockOwner() {
 	// 	return fl&SetattrLockOwner != 0
 	// }
-	// if req.Valid.Crtime() {
-	// 	return fl&SetattrCrtime != 0
-	// }
-	// if req.Valid.Chgtime() {
-	// 	return fl&SetattrChgtime != 0
-	// }
 	// if req.Valid.Bkuptime() {
 	// 	return fl&SetattrBkuptime != 0
 	// }
 	resp.Attr = n.attr
+
 	return nil
 }
 
@@ -177,8 +177,8 @@ func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, e
 	d := new(DFSNode)
 	d.init(req.Name, req.Mode)
 	n.kids[req.Name] = d
-	// n.attr.Uid = req.Header.Uid
-	// n.attr.Gid = req.Header.Uid
+	n.attr.Uid = req.Header.Uid
+	n.attr.Gid = req.Header.Gid
 	return d, nil
 }
 
@@ -187,9 +187,12 @@ func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	p_out("readdirall for %q\n", n.name)
 	var dirDirs = []fuse.Dirent{}
 	for _, val := range n.kids {
-		typ := fuse.DT_File
-		if os.ModeDir&val.attr.Mode == os.ModeDir {
+		typ := fuse.DT_Unknown
+		if val.attr.Mode.IsDir() {
 			typ = fuse.DT_Dir
+		}
+		if val.attr.Mode.IsRegular() {
+			typ = fuse.DT_File
 		}
 		dirDirs = append(dirDirs,
 			fuse.Dirent{Inode: val.attr.Inode, Type: typ, Name: val.name})
@@ -203,19 +206,22 @@ func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fus
 	f := new(DFSNode)
 	f.init(req.Name, req.Mode)
 	n.kids[req.Name] = f
+
 	return f, f, nil
 }
 
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	p_out("write req: %q\nin %q\n\n", req, n)
-	// make sure there is room for whatever data is already there, whatever
-	// crazy offset the write might be using, and the amount of new data
-	// being written
-	t := make([]uint8, int64(len(n.data))+int64(req.Offset)+int64(len(req.Data)))
+	length := int64(len(n.data))
+	if req.Offset > length {
+		length += req.Offset
+	}
+	t := make([]uint8, length+int64(len(req.Data)))
 	copy(t, n.data)
 	resp.Size = copy(t[req.Offset:], req.Data)
 	n.data = t
 	n.attr.Size = uint64(len(t))
+	// p_out("resp.Size: %d, n.attr.Size: %d\n", resp.Size, n.attr.Size)
 	n.dirty = true
 
 	return nil
@@ -236,6 +242,7 @@ func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	if n.dirty {
 		n.attr.Atime = time.Now()
 		n.attr.Mtime = time.Now()
+		n.dirty = false
 	}
 	return nil
 }
