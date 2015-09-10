@@ -3,7 +3,9 @@ package main
 
 // NOTES:
 //
-//  redis compiled on OS X successfully 9/10/15 - 13:154
+//  redis compiled on OS X successfully 9/10/15 - 13:15
+//  redis compiled on Ubuntu successfully 9/10/15 - 14:06
+//  Submitting to submit server - 14:07
 //
 //  Thoughts on why flush() is called multiple times:
 //  The documentation (if that's what we want to call it) for HandleFlusher()
@@ -268,19 +270,19 @@ func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs
 	return fuse.ENOENT
 }
 
-func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
-	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
-	return nil, nil
-}
+// func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
+// 	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
+// 	return nil, nil
+// }
 
-func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
-	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
-	return "", nil
-}
-func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
-	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
-	return nil, nil
-}
+// func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+// 	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
+// 	return "", nil
+// }
+// func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
+// 	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
+// 	return nil, nil
+// }
 
 //=============================================================================
 
