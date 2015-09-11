@@ -3,9 +3,7 @@ package main
 
 // NOTES:
 //
-//  redis compiled on OS X successfully 9/10/15 - 13:15
-//  redis compiled on Ubuntu successfully 9/10/15 - 14:06
-//  Submitting to submit server - 14:07
+//  OS X redic compile check: 9/11/15 - 13:55
 //
 //  Thoughts on why flush() is called multiple times:
 //  The documentation (if that's what we want to call it) for HandleFlusher()
@@ -19,7 +17,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"time"
 
@@ -225,16 +222,13 @@ func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.
 
 	if limit > olen {
 		t := make([]byte, limit)
-		tocopy := uint64(math.Max(float64(olen), float64(offset)))
-		copy(t[:tocopy], n.data[:tocopy])
+		copy(t, n.data)
 		n.data = t
 		n.attr.Size = limit
 	}
 	resp.Size = copy(n.data[offset:], req.Data)
 	n.dirty = true
 
-	// p_out("old:%d[%s], new: %d[%s], offset: %d, cp: %d, length: %d\n\n",
-	// 	curSize, n.data, len(req.Data), req.Data, offset, resp.Size, length)
 	return nil
 }
 
