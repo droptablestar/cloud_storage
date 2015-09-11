@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"time"
 
@@ -60,7 +61,7 @@ var uid uint32 = uint32(os.Getuid())
 var gid uint32 = uint32(os.Getegid())
 
 func (d *DFSNode) init(name string, mode os.FileMode) {
-	p_out("init: %q with name: %q and mode: %#X\n", d, name, mode)
+	// p_out("init: %q with name: %q and mode: %#X\n", d, name, mode)
 	// had some isssues with dir's that were initially 0B size
 	startTime := time.Now()
 	var size uint64 = 0
@@ -87,10 +88,10 @@ func (d *DFSNode) init(name string, mode os.FileMode) {
 }
 
 func (d *DFSNode) String() string {
-	// return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v, data: %s\n",
-	// 	d.nid, d.name, d.attr, d.dirty, d.kids, d.data)
-	return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v\n",
-		d.nid, d.name, d.attr, d.dirty, d.kids)
+	return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v, data: %s\n",
+		d.nid, d.name, d.attr, d.dirty, d.kids, d.data)
+	// return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v\n",
+	// 	d.nid, d.name, d.attr, d.dirty, d.kids)
 }
 
 type FS struct{}
@@ -103,19 +104,19 @@ func (FS) Root() (fs.Node, error) {
 }
 
 func (n *DFSNode) Attr(ctx context.Context, attr *fuse.Attr) error {
-	p_out("attr %q <- \n%q\n\n", attr, n)
+	// p_out("attr %q <- \n%q\n\n", attr, n)
 	*attr = n.attr
 	return nil
 }
 
 func (n *DFSNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error {
-	p_out("getattr for %q in \n%q\n\n", req, n)
+	// p_out("getattr for %q in \n%q\n\n", req, n)
 	resp.Attr = n.attr
 	return nil
 }
 
 func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
-	p_out("attr for %q in \n%q\n\n", req, n)
+	// p_out("attr for %q in \n%q\n\n", req, n)
 	// Setattr() should only be allowed to modify particular parts of a
 	// nodes attributes.
 	if req.Valid.Mode() {
@@ -175,7 +176,7 @@ func (n *DFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
 // Cut and paste :-P
 func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
-	p_out("mkdir %q in \n%q\n\n", req, n.name)
+	// p_out("mkdir %q in \n%q\n\n", req, n.name)
 	d := new(DFSNode)
 	d.init(req.Name, req.Mode)
 	n.kids[req.Name] = d
@@ -186,9 +187,9 @@ func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, e
 
 // TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	p_out("readdirall for %q\n", n.name)
+	// p_out("readdirall for %q\n", n.name)
 	var dirDirs = []fuse.Dirent{}
-	for _, val := range n.kids {
+	for key, val := range n.kids {
 		typ := fuse.DT_Unknown
 		if val.attr.Mode.IsDir() {
 			typ = fuse.DT_Dir
@@ -196,15 +197,18 @@ func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		if val.attr.Mode.IsRegular() {
 			typ = fuse.DT_File
 		}
+
+		if val.attr.Mode&os.ModeType == os.ModeSymlink {
+			typ = fuse.DT_Link
+		}
 		dirDirs = append(dirDirs,
-			fuse.Dirent{Inode: val.attr.Inode, Type: typ, Name: val.name})
+			fuse.Dirent{Inode: val.attr.Inode, Type: typ, Name: key})
 	}
-	p_out("dirs: %q\n\n", dirDirs)
 	return dirDirs, nil
 }
 
 func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
-	p_out("create req: %q \nin %q\n", req, n)
+	p_out("create req: %q \nin %q\n\n", req, n)
 	f := new(DFSNode)
 	f.init(req.Name, req.Mode)
 	n.kids[req.Name] = f
@@ -213,34 +217,39 @@ func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fus
 }
 
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	p_out("write req: %q\nin %q\n\n", req, n)
-	length := int64(len(n.data))
-	if req.Offset > length {
-		length += req.Offset
+	p_out("write req: %q\nin %q\n", req, n)
+	olen := uint64(len(n.data))
+	wlen := uint64(len(req.Data))
+	offset := uint64(req.Offset)
+	limit := offset + wlen
+
+	if limit > olen {
+		t := make([]byte, limit)
+		tocopy := uint64(math.Max(float64(olen), float64(offset)))
+		copy(t[:tocopy], n.data[:tocopy])
+		n.data = t
+		n.attr.Size = limit
 	}
-	t := make([]uint8, length+int64(len(req.Data)))
-	copy(t, n.data)
-	resp.Size = copy(t[req.Offset:], req.Data)
-	n.data = t
-	n.attr.Size = uint64(len(t))
-	// p_out("resp.Size: %d, n.attr.Size: %d\n", resp.Size, n.attr.Size)
+	resp.Size = copy(n.data[offset:], req.Data)
 	n.dirty = true
 
+	// p_out("old:%d[%s], new: %d[%s], offset: %d, cp: %d, length: %d\n\n",
+	// 	curSize, n.data, len(req.Data), req.Data, offset, resp.Size, length)
 	return nil
 }
 
 func (n *DFSNode) ReadAll(ctx context.Context) ([]byte, error) {
-	p_out("readall: %q\n\n", n)
+	// p_out("readall: %q\n\n", n)
 	return n.data, nil
 }
 
 func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
-	p_out("fsync for %q\n", n)
+	// p_out("fsync for %q\n", n)
 	return nil
 }
 
 func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
-	p_out("flush %q \nin %q\n\n", req, n)
+	// p_out("flush %q \nin %q\n\n", req, n)
 	if n.dirty {
 		n.attr.Atime = time.Now()
 		n.attr.Mtime = time.Now()
@@ -250,9 +259,12 @@ func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 }
 
 func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-	p_out("remove %q from \n%q \n\n", req, n)
+	// p_out("remove %q from \n%q \n\n", req, n)
 	// If the DFSNode exists...delete it.
-	if _, ok := n.kids[req.Name]; ok {
+	if val, ok := n.kids[req.Name]; ok {
+		if val.attr.Mode&os.ModeType == os.ModeSymlink {
+			n.attr.Nlink -= 1
+		}
 		delete(n.kids, req.Name)
 		return nil
 	}
@@ -260,7 +272,7 @@ func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 }
 
 func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-	p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
+	// p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
 	if outDir, ok := newDir.(*DFSNode); ok {
 		n.kids[req.OldName].name = req.NewName
 		outDir.kids[req.NewName] = n.kids[req.OldName]
@@ -270,19 +282,37 @@ func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs
 	return fuse.ENOENT
 }
 
-// func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
-// 	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
-// 	return nil, nil
-// }
+func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
+	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
+	link := *new(DFSNode)
+	link.attr = *new(fuse.Attr)
+	link = *n.kids[req.Target]
+	link.attr.Mode = os.ModeSymlink | 0755
+	n.attr.Nlink += 1
+	p_out("link: %q\nn: %q\nkid: %q\n\n", link, n, n.kids[req.Target])
+	n.kids[req.NewName] = &link
+	return &link, nil
+}
 
-// func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
-// 	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
-// 	return "", nil
-// }
-// func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
-// 	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
-// 	return nil, nil
-// }
+func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
+	return n.name, nil
+}
+
+func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
+	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
+	hlink := new(DFSNode)
+	hlink.init(req.NewName, os.ModeDir)
+	if oldDir, ok := old.(*DFSNode); ok {
+		if ok := oldDir.Attr(ctx, &hlink.attr); ok == nil {
+			hlink.data = make([]uint8, hlink.attr.Size)
+			copy(hlink.data, oldDir.data)
+			n.kids[req.NewName] = hlink
+			return oldDir, nil
+		}
+	}
+	return nil, fuse.ENOENT
+}
 
 //=============================================================================
 
