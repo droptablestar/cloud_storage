@@ -3,7 +3,8 @@ package main
 
 // NOTES:
 //
-//  OS X redic compile check: 9/11/15 - 13:55
+//  OS X redis compile check: 9/11/15 - 13:55
+//  Ubuntu redis compile check: 9/11/15 - 14:03
 //
 //  Thoughts on why flush() is called multiple times:
 //  The documentation (if that's what we want to call it) for HandleFlusher()
@@ -276,37 +277,37 @@ func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs
 	return fuse.ENOENT
 }
 
-func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
-	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
-	link := *new(DFSNode)
-	link.attr = *new(fuse.Attr)
-	link = *n.kids[req.Target]
-	link.attr.Mode = os.ModeSymlink | 0755
-	n.attr.Nlink += 1
-	p_out("link: %q\nn: %q\nkid: %q\n\n", link, n, n.kids[req.Target])
-	n.kids[req.NewName] = &link
-	return &link, nil
-}
+// func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
+// 	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
+// 	link := *new(DFSNode)
+// 	link.attr = *new(fuse.Attr)
+// 	link = *n.kids[req.Target]
+// 	link.attr.Mode = os.ModeSymlink | 0755
+// 	n.attr.Nlink += 1
+// 	p_out("link: %q\nn: %q\nkid: %q\n\n", link, n, n.kids[req.Target])
+// 	n.kids[req.NewName] = &link
+// 	return &link, nil
+// }
 
-func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
-	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
-	return n.name, nil
-}
+// func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+// 	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
+// 	return n.name, nil
+// }
 
-func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
-	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
-	hlink := new(DFSNode)
-	hlink.init(req.NewName, os.ModeDir)
-	if oldDir, ok := old.(*DFSNode); ok {
-		if ok := oldDir.Attr(ctx, &hlink.attr); ok == nil {
-			hlink.data = make([]uint8, hlink.attr.Size)
-			copy(hlink.data, oldDir.data)
-			n.kids[req.NewName] = hlink
-			return oldDir, nil
-		}
-	}
-	return nil, fuse.ENOENT
-}
+// func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
+// 	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
+// 	hlink := new(DFSNode)
+// 	hlink.init(req.NewName, os.ModeDir)
+// 	if oldDir, ok := old.(*DFSNode); ok {
+// 		if ok := oldDir.Attr(ctx, &hlink.attr); ok == nil {
+// 			hlink.data = make([]uint8, hlink.attr.Size)
+// 			copy(hlink.data, oldDir.data)
+// 			n.kids[req.NewName] = hlink
+// 			return oldDir, nil
+// 		}
+// 	}
+// 	return nil, fuse.ENOENT
+// }
 
 //=============================================================================
 
