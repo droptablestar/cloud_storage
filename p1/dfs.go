@@ -6,6 +6,9 @@ package main
 //  OS X redis compile check: 9/11/15 - 13:55
 //  Ubuntu redis compile check: 9/11/15 - 14:03
 //
+//  OS X redis compile check: 9/11/15 - 13:55
+//  Ubuntu redis & leveldb compile check: 9/13/15 - 10:11
+//
 //  Thoughts on why flush() is called multiple times:
 //  The documentation (if that's what we want to call it) for HandleFlusher()
 //  says, "Flush is called each time the file or directory is closed". My
@@ -86,10 +89,10 @@ func (d *DFSNode) init(name string, mode os.FileMode) {
 }
 
 func (d *DFSNode) String() string {
-	return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v, data: %s\n",
-		d.nid, d.name, d.attr, d.dirty, d.kids, d.data)
-	// return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v\n",
-	// 	d.nid, d.name, d.attr, d.dirty, d.kids)
+	// return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v, data: %s\n",
+	// 	d.nid, d.name, d.attr, d.dirty, d.kids, d.data)
+	return fmt.Sprintf("nid: %d, name: %s, attr: {%q}, dirty: %t, kids: %#v\n",
+		d.nid, d.name, d.attr, d.dirty, d.kids)
 }
 
 type FS struct{}
@@ -185,7 +188,7 @@ func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, e
 
 // TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	p_out("readdirall for %q\n", n.name)
+	// p_out("readdirall for %q\n", n.name)
 	var dirDirs = []fuse.Dirent{}
 	for key, val := range n.kids {
 		typ := fuse.DT_Unknown
@@ -206,7 +209,7 @@ func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 }
 
 func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
-	p_out("create req: %q \nin %q\n\n", req, n)
+	// p_out("create req: %q \nin %q\n\n", req, n)
 	f := new(DFSNode)
 	f.init(req.Name, req.Mode)
 	n.kids[req.Name] = f
@@ -215,7 +218,7 @@ func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fus
 }
 
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	p_out("write req: %q\nin %q\n", req, n)
+	// p_out("write req: %q\nin %q\n", req, n)
 	olen := uint64(len(n.data))
 	wlen := uint64(len(req.Data))
 	offset := uint64(req.Offset)
@@ -234,17 +237,17 @@ func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.
 }
 
 func (n *DFSNode) ReadAll(ctx context.Context) ([]byte, error) {
-	p_out("readall: %q\n\n", n)
+	// p_out("readall: %q\n\n", n)
 	return n.data, nil
 }
 
 func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
-	p_out("fsync for %q\n", n)
+	// p_out("fsync for %q\n", n)
 	return nil
 }
 
 func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
-	p_out("flush %q \nin %q\n\n", req, n)
+	// p_out("flush %q \nin %q\n\n", req, n)
 	if n.dirty {
 		n.attr.Atime = time.Now()
 		n.attr.Mtime = time.Now()
@@ -267,7 +270,7 @@ func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 }
 
 func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-	p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
+	// p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
 	if outDir, ok := newDir.(*DFSNode); ok {
 		n.kids[req.OldName].name = req.NewName
 		outDir.kids[req.NewName] = n.kids[req.OldName]
@@ -281,12 +284,16 @@ func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Nod
 	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
 	link := *new(DFSNode)
 	link.attr = *new(fuse.Attr)
-	link = *n.kids[req.Target]
-	link.attr.Mode = os.ModeSymlink | 0755
-	n.attr.Nlink += 1
-	p_out("link: %q\nn: %q\nkid: %q\n\n", link, n, n.kids[req.Target])
-	n.kids[req.NewName] = &link
-	return &link, nil
+	// for some reason redis was trying to link to a file that didn't exist
+	if _, ok := n.kids[req.Target]; ok {
+		link.attr.Mode = os.ModeSymlink | 0755
+		n.attr.Nlink += 1
+		p_out("link: %q\nn: %q\nkid: %q\n\n", link, n, n.kids[req.Target])
+		n.kids[req.NewName] = &link
+
+		return &link, nil
+	}
+	return nil, fuse.ENOENT
 }
 
 func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
