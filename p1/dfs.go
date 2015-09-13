@@ -3,10 +3,12 @@ package main
 
 // NOTES:
 //
+//  WITHOUT LINKS:
 //  OS X redis compile check: 9/11/15 - 13:55
 //  Ubuntu redis compile check: 9/11/15 - 14:03
 //
-//  OS X redis compile check: 9/11/15 - 13:55
+//  WITH LINKS:
+//  OS X redis & leveldb  compile check: 9/11/15 - 10:14
 //  Ubuntu redis & leveldb compile check: 9/13/15 - 10:11
 //
 //  Thoughts on why flush() is called multiple times:
