@@ -185,7 +185,7 @@ func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, e
 
 // TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	// p_out("readdirall for %q\n", n.name)
+	p_out("readdirall for %q\n", n.name)
 	var dirDirs = []fuse.Dirent{}
 	for key, val := range n.kids {
 		typ := fuse.DT_Unknown
@@ -234,17 +234,17 @@ func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.
 }
 
 func (n *DFSNode) ReadAll(ctx context.Context) ([]byte, error) {
-	// p_out("readall: %q\n\n", n)
+	p_out("readall: %q\n\n", n)
 	return n.data, nil
 }
 
 func (n *DFSNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
-	// p_out("fsync for %q\n", n)
+	p_out("fsync for %q\n", n)
 	return nil
 }
 
 func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
-	// p_out("flush %q \nin %q\n\n", req, n)
+	p_out("flush %q \nin %q\n\n", req, n)
 	if n.dirty {
 		n.attr.Atime = time.Now()
 		n.attr.Mtime = time.Now()
@@ -254,7 +254,7 @@ func (n *DFSNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 }
 
 func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-	// p_out("remove %q from \n%q \n\n", req, n)
+	p_out("remove %q from \n%q \n\n", req, n)
 	// If the DFSNode exists...delete it.
 	if val, ok := n.kids[req.Name]; ok {
 		if val.attr.Mode&os.ModeType == os.ModeSymlink {
@@ -267,7 +267,7 @@ func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 }
 
 func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-	// p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
+	p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
 	if outDir, ok := newDir.(*DFSNode); ok {
 		n.kids[req.OldName].name = req.NewName
 		outDir.kids[req.NewName] = n.kids[req.OldName]
@@ -277,37 +277,37 @@ func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs
 	return fuse.ENOENT
 }
 
-// func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
-// 	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
-// 	link := *new(DFSNode)
-// 	link.attr = *new(fuse.Attr)
-// 	link = *n.kids[req.Target]
-// 	link.attr.Mode = os.ModeSymlink | 0755
-// 	n.attr.Nlink += 1
-// 	p_out("link: %q\nn: %q\nkid: %q\n\n", link, n, n.kids[req.Target])
-// 	n.kids[req.NewName] = &link
-// 	return &link, nil
-// }
+func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
+	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
+	link := *new(DFSNode)
+	link.attr = *new(fuse.Attr)
+	link = *n.kids[req.Target]
+	link.attr.Mode = os.ModeSymlink | 0755
+	n.attr.Nlink += 1
+	p_out("link: %q\nn: %q\nkid: %q\n\n", link, n, n.kids[req.Target])
+	n.kids[req.NewName] = &link
+	return &link, nil
+}
 
-// func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
-// 	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
-// 	return n.name, nil
-// }
+func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
+	return n.name, nil
+}
 
-// func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
-// 	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
-// 	hlink := new(DFSNode)
-// 	hlink.init(req.NewName, os.ModeDir)
-// 	if oldDir, ok := old.(*DFSNode); ok {
-// 		if ok := oldDir.Attr(ctx, &hlink.attr); ok == nil {
-// 			hlink.data = make([]uint8, hlink.attr.Size)
-// 			copy(hlink.data, oldDir.data)
-// 			n.kids[req.NewName] = hlink
-// 			return oldDir, nil
-// 		}
-// 	}
-// 	return nil, fuse.ENOENT
-// }
+func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
+	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
+	hlink := new(DFSNode)
+	hlink.init(req.NewName, os.ModeDir)
+	if oldDir, ok := old.(*DFSNode); ok {
+		if ok := oldDir.Attr(ctx, &hlink.attr); ok == nil {
+			hlink.data = make([]uint8, hlink.attr.Size)
+			copy(hlink.data, oldDir.data)
+			n.kids[req.NewName] = hlink
+			return hlink, nil
+		}
+	}
+	return nil, fuse.ENOENT
+}
 
 //=============================================================================
 
