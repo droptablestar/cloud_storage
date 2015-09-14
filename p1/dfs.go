@@ -8,7 +8,7 @@ package main
 //  Ubuntu redis compile check: 9/11/15 - 14:03
 //
 //  WITH LINKS:
-//  OS X redis & leveldb  compile check: 9/11/15 - 10:14
+//  OS X redis & leveldb  compile check: 9/13/15 - 20:55
 //  Ubuntu redis & leveldb compile check: 9/13/15 - 10:11
 //
 //  Thoughts on why flush() is called multiple times:
@@ -179,7 +179,7 @@ func (n *DFSNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
 // Cut and paste :-P
 func (n *DFSNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
-	// p_out("mkdir %q in \n%q\n\n", req, n.name)
+	p_out("mkdir %q in \n%q\n\n", req, n.name)
 	d := new(DFSNode)
 	d.init(req.Name, req.Mode)
 	n.kids[req.Name] = d
@@ -211,7 +211,7 @@ func (n *DFSNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 }
 
 func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
-	// p_out("create req: %q \nin %q\n\n", req, n)
+	p_out("create req: %q \nin %q\n\n", req, n)
 	f := new(DFSNode)
 	f.init(req.Name, req.Mode)
 	n.kids[req.Name] = f
@@ -220,8 +220,9 @@ func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fus
 }
 
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	// p_out("write req: %q\nin %q\n", req, n)
-	olen := uint64(len(n.data))
+	p_out("write req: %q\nin %q\n", req, n)
+	// olen := uint64(len(n.data))
+	olen := uint64(n.attr.Size)
 	wlen := uint64(len(req.Data))
 	offset := uint64(req.Offset)
 	limit := offset + wlen
@@ -239,7 +240,7 @@ func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.
 }
 
 func (n *DFSNode) ReadAll(ctx context.Context) ([]byte, error) {
-	// p_out("readall: %q\n\n", n)
+	p_out("readall: %q\n\n", n)
 	return n.data, nil
 }
 
@@ -272,7 +273,7 @@ func (n *DFSNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 }
 
 func (n *DFSNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
-	// p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
+	p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
 	if outDir, ok := newDir.(*DFSNode); ok {
 		n.kids[req.OldName].name = req.NewName
 		outDir.kids[req.NewName] = n.kids[req.OldName]
@@ -290,7 +291,6 @@ func (n *DFSNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Nod
 	if _, ok := n.kids[req.Target]; ok {
 		link.attr.Mode = os.ModeSymlink | 0755
 		n.attr.Nlink += 1
-		p_out("link: %q\nn: %q\nkid: %q\n\n", link, n, n.kids[req.Target])
 		n.kids[req.NewName] = &link
 
 		return &link, nil
@@ -305,15 +305,9 @@ func (n *DFSNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (stri
 
 func (n *DFSNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
 	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
-	hlink := new(DFSNode)
-	hlink.init(req.NewName, os.ModeDir)
 	if oldDir, ok := old.(*DFSNode); ok {
-		if ok := oldDir.Attr(ctx, &hlink.attr); ok == nil {
-			hlink.data = make([]uint8, hlink.attr.Size)
-			copy(hlink.data, oldDir.data)
-			n.kids[req.NewName] = hlink
-			return hlink, nil
-		}
+		n.kids[req.NewName] = oldDir
+		return oldDir, nil
 	}
 	return nil, fuse.ENOENT
 }
