@@ -6,7 +6,7 @@ package dfs
 */
 
 import (
-	"encoding/json"
+	// "encoding/json"
 	"log"
 	"math/rand"
 	"os"
@@ -20,7 +20,7 @@ type DNode struct {
 	Name      string
 	Attrs     fuse.Attr
 	ParentSig string
-	Version   int
+	Version   uint64
 	PrevSig   string
 
 	ChildSigs map[string]string
@@ -36,6 +36,27 @@ type DNode struct {
 	data      []byte
 }
 
+func (d *DNode) init(name string, mode os.FileMode) {
+	startTime := time.Now()
+	var size uint64 = 0
+	d.Name = name
+	d.Version = nextInd
+	d.Attrs = fuse.Attr{
+		Valid:  1 * time.Minute,
+		Inode:  nextInd,
+		Size:   size,
+		Atime:  startTime,
+		Mtime:  startTime,
+		Ctime:  startTime,
+		Crtime: startTime,
+		Mode:   mode,
+		Nlink:  1,
+		Uid:    uid,
+		Gid:    gid,
+	}
+	d.kids = make(map[string]*DNode)
+}
+
 type Head struct {
 	Root    string
 	NextInd uint64
@@ -44,8 +65,8 @@ type Head struct {
 
 var debug = false
 var compress = false
-var uid = os.Geteuid()
-var gid = os.Getegid()
+var uid = uint32(os.Geteuid())
+var gid = uint32(os.Getegid())
 var root *DNode
 var nextInd uint64 = 1
 var replicaID uint64
@@ -56,6 +77,11 @@ type FS struct{}
 
 //=============================================================================
 // Let one at a time in
+
+func getHead() (*DNode, uint64) {
+	p_out("getHead()\n")
+	return nil, 0
+}
 
 func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm string) {
 	// Initialize a new diskv store, rooted at "my-data-dir", with a 1MB cache.

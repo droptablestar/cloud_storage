@@ -2,8 +2,8 @@
 package dfs
 
 import (
-	"crypto/sha1"
-	"encoding/base64"
+	// "crypto/sha1"
+	// "encoding/base64"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"os"
@@ -59,13 +59,13 @@ func initStore(newfs bool, dbPath string) {
 
 // returns len of next chunk
 func rkChunk(buf []byte) int {
-
+	return 0
 	// ...
 }
 
 // return base64 (stringified) version of sha1 hash of array of bytes
 func shaString(buf []byte) string {
-
+	return ""
 	// ...
 
 }
@@ -74,28 +74,28 @@ func shaString(buf []byte) string {
 // stringified sha1 hash of each such chunk and use as key
 // to store in key-value store. Return array of such strings.
 func putBlocks(data []byte) []string {
-
+	return []string{""}
 	// ...
 
 }
 
 // puts a block of data at key defined by hash of data. Return ASCII hash.
 func putBlock(data []byte) string {
-
+	return ""
 	// ...
 
 }
 
 // store data at a specific key, used for "head"
 func putBlockSig(s string, data []byte) error {
-
+	return nil
 	// ...
 
 }
 
 // []byte or nil
 func getBlock(key string) []byte {
-
+	return nil
 	// ...
 
 }

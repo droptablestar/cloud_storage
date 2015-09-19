@@ -8,11 +8,11 @@ package main
 import (
 	//	Should be "github.com/mattn/go-getopt", but seems go
 	//	doesn't like to mix absolute and relative imports.
-	. "../../../github.com/mattn/go-getopt"
 	"fmt"
+	"github.com/mattn/go-getopt"
 	"os"
 
-	"./dfs"
+	"bitbucket.org/jreeseue/818/p2/dfs"
 )
 
 //=============================================================================
@@ -27,7 +27,7 @@ func main() {
 	newfs := ""
 
 	for {
-		if c = Getopt("cdnm:s:"); c == EOF {
+		if c = getopt.Getopt("cdnm:s:"); c == getopt.EOF {
 			break
 		}
 
@@ -37,19 +37,20 @@ func main() {
 		case 'd':
 			debug = !debug
 		case 'm':
-			mount = OptArg
+			mount = getopt.OptArg
 		case 'n':
 			newfs = "NEWFS "
 		case 's':
-			storePath = OptArg
+			storePath = getopt.OptArg
 		case 't':
-			tm = OptArg
+			tm = getopt.OptArg
 		default:
 			println("usage: main.go [-d | -c | -m <mountpt> | -t <timespec>]", c)
 			os.Exit(1)
 		}
 	}
-	fmt.Printf("\nStartup up with debug %v, compress %v, mountpt: %q, %sstorePath %q, time %q\n\n", debug, compress, mount, newfs, storePath, tm)
+	fmt.Printf("\nStartup up with debug %v, compress %v, mountpt: %q, %sstorePath %q, time %q\n\n",
+		debug, compress, mount, newfs, storePath, tm)
 
 	dfs.Init(debug, compress, mount, newfs != "", storePath, tm)
 
