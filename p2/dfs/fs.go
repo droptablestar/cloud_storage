@@ -6,7 +6,7 @@ package dfs
 */
 
 import (
-	// "encoding/json"
+	"encoding/json"
 	"log"
 	"math/rand"
 	"os"
@@ -14,6 +14,9 @@ import (
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
+	"fmt"
+	"os/signal"
+	"syscall"
 )
 
 type DNode struct {
@@ -38,13 +41,12 @@ type DNode struct {
 
 func (d *DNode) init(name string, mode os.FileMode) {
 	startTime := time.Now()
-	var size uint64 = 0
 	d.Name = name
 	d.Version = nextInd
+	d.ChildSigs = make(map[string]string)
 	d.Attrs = fuse.Attr{
 		Valid:  1 * time.Minute,
 		Inode:  nextInd,
-		Size:   size,
 		Atime:  startTime,
 		Mtime:  startTime,
 		Ctime:  startTime,
@@ -78,8 +80,25 @@ type FS struct{}
 //=============================================================================
 // Let one at a time in
 
+func marshal(toMarshal interface{}) []byte {
+	if buf, err := json.MarshalIndent(toMarshal, "", " "); err == nil {
+		return buf
+	} else {
+		panic(fmt.Sprintf("Couldn't marshall %q\n", err))
+	}
+}
+
 func getHead() (*DNode, uint64) {
-	p_out("getHead()\n")
+	if val, ok := db.Get([]byte("head"), nil); ok == nil {
+		p_out("FOUND HEAD!")
+		var hd *Head
+		json.Unmarshal(val, &hd)
+		if val, ok := db.Get([]byte(hd.Root), nil); ok == nil {
+			var rt *DNode
+			json.Unmarshal(val, &rt)
+			return rt, hd.NextInd
+		}
+	}
 	return nil, 0
 }
 
@@ -88,7 +107,6 @@ func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm s
 
 	debug = dbg
 	compress = cmp
-
 	initStore(newfs, dbPath)
 
 	replicaID = uint64(rand.Int63())
@@ -100,6 +118,17 @@ func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm s
 		p_out("GETHEAD fail\n")
 		root = new(DNode)
 		root.init("", os.ModeDir|0755)
+
+		mRoot := marshal(root)
+		mRootSig := shaString(mRoot)
+
+		head := new(Head)
+		head.Root = mRootSig
+		head.NextInd = nextInd
+		mHead := marshal(head)
+
+		db.Put([]byte("head"), mHead, nil)
+		db.Put([]byte(mRootSig), mRoot, nil)
 	}
 	p_out("root inode %v", root.Attrs.Inode)
 
@@ -114,7 +143,16 @@ func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm s
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer c.Close()
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ch
+		defer c.Close()
+		defer db.Close()
+		fuse.Unmount(mountPoint)
+		os.Exit(1)
+	}()
 
 	sem = make(chan int, 1)
 	go Flusher(sem)
@@ -146,7 +184,7 @@ func Flusher(sem chan int) {
 		time.Sleep(5 * time.Second)
 		in()
 
-		p_out("\n\tFLUSHER\n\n")
+		// p_out("\n\tFLUSHER\n\n")
 
 		// ...
 

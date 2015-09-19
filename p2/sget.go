@@ -13,7 +13,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("USAGE: sget <db path> [<key>]\n")
+		fmt.Println("USAGE: sget <db path> [<key>]")
 	} else {
 		db, err := leveldb.OpenFile(os.Args[1], nil)
 		if err != nil {

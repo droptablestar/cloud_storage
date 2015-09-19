@@ -2,8 +2,8 @@
 package dfs
 
 import (
-	// "crypto/sha1"
-	// "encoding/base64"
+	"crypto/sha1"
+	"encoding/base64"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"os"
@@ -65,9 +65,9 @@ func rkChunk(buf []byte) int {
 
 // return base64 (stringified) version of sha1 hash of array of bytes
 func shaString(buf []byte) string {
-	return ""
-	// ...
-
+	h := sha1.New()
+	h.Write(buf)
+	return base64.StdEncoding.EncodeToString(h.Sum(nil)[:])
 }
 
 // Use rk fingerprints to chunkify array of data. Take the
