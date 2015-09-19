@@ -133,6 +133,7 @@ func (n *DFSNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *f
 	}
 	if req.Valid.Size() {
 		n.attr.Size = req.Size
+		n.data = n.data[:req.Size]
 	}
 	if req.Valid.Atime() {
 		n.attr.Atime = req.Atime
@@ -221,8 +222,7 @@ func (n *DFSNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fus
 
 func (n *DFSNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	p_out("write req: %q\nin %q\n", req, n)
-	// olen := uint64(len(n.data))
-	olen := uint64(n.attr.Size)
+	olen := uint64(len(n.data))
 	wlen := uint64(len(req.Data))
 	offset := uint64(req.Offset)
 	limit := offset + wlen
