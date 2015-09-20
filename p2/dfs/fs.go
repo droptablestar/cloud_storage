@@ -14,7 +14,6 @@ import (
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
-	"fmt"
 	"os/signal"
 	"syscall"
 )
@@ -70,6 +69,7 @@ var compress = false
 var uid = uint32(os.Geteuid())
 var gid = uint32(os.Getegid())
 var root *DNode
+var head *Head
 var nextInd uint64 = 1
 var replicaID uint64
 
@@ -80,23 +80,16 @@ type FS struct{}
 //=============================================================================
 // Let one at a time in
 
-func marshal(toMarshal interface{}) []byte {
-	if buf, err := json.MarshalIndent(toMarshal, "", " "); err == nil {
-		return buf
-	} else {
-		panic(fmt.Sprintf("Couldn't marshall %q\n", err))
-	}
-}
-
 func getHead() (*DNode, uint64) {
 	if val, ok := db.Get([]byte("head"), nil); ok == nil {
 		p_out("FOUND HEAD!")
-		var hd *Head
-		json.Unmarshal(val, &hd)
-		if val, ok := db.Get([]byte(hd.Root), nil); ok == nil {
+		json.Unmarshal(val, &head)
+		p_out("head: %q\n", val)
+		if val, ok := db.Get([]byte(head.Root), nil); ok == nil {
+			p_out("root: %q\n", val)
 			var rt *DNode
 			json.Unmarshal(val, &rt)
-			return rt, hd.NextInd
+			return rt, head.NextInd
 		}
 	}
 	return nil, 0
@@ -120,15 +113,15 @@ func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm s
 		root.init("", os.ModeDir|0755)
 
 		mRoot := marshal(root)
-		mRootSig := shaString(mRoot)
+		rootSig := shaString(mRoot)
 
-		head := new(Head)
-		head.Root = mRootSig
+		head = new(Head)
+		head.Root = rootSig
 		head.NextInd = nextInd
 		mHead := marshal(head)
 
 		db.Put([]byte("head"), mHead, nil)
-		db.Put([]byte(mRootSig), mRoot, nil)
+		db.Put([]byte(rootSig), mRoot, nil)
 	}
 	p_out("root inode %v", root.Attrs.Inode)
 

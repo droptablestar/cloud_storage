@@ -145,7 +145,20 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 	p_out("create req: %q \nin %q\n\n", req, n)
 	f := new(DNode)
 	f.init(req.Name, req.Mode)
-	n.kids[req.Name] = f
+	mF := marshal(f)
+	fSig := shaString(mF)
+	db.Put([]byte(fSig), mF, nil)
+
+	root.ChildSigs[req.Name] = fSig
+	nextInd++
+	root.Version = nextInd
+	mRoot := marshal(root)
+	rootSig := shaString(mRoot)
+	db.Put([]byte(rootSig), mRoot, nil)
+
+	head.Root = rootSig
+	mHead := marshal(head)
+	db.Put([]byte("head"), mHead, nil)
 
 	return f, f, nil
 }
@@ -180,8 +193,28 @@ func (n *DNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
 }
 
 func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
-	// p_out("flush %q \nin %q\n\n", req, n)
+	p_out("flush %q \nin %q\n\n", req, n)
 	if n.dirty {
+		n.Version = nextInd
+		nDataSig := shaString(n.data)
+		db.Put([]byte(nDataSig), n.data, nil)
+		n.DataBlocks = append(n.DataBlocks, nDataSig)
+
+		mN := marshal(n)
+		nSig := shaString(mN)
+		db.Put([]byte(nSig), mN, nil)
+
+		root.ChildSigs[n.Name] = nSig
+		nextInd++
+		root.Version = nextInd
+		mRoot := marshal(root)
+		rootSig := shaString(mRoot)
+		db.Put([]byte(rootSig), mRoot, nil)
+
+		head.Root = rootSig
+		mHead := marshal(head)
+		db.Put([]byte("head"), mHead, nil)
+
 		n.Attrs.Atime = time.Now()
 		n.Attrs.Mtime = time.Now()
 		n.dirty = false

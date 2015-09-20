@@ -4,6 +4,8 @@ package dfs
 import (
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"os"
@@ -65,9 +67,8 @@ func rkChunk(buf []byte) int {
 
 // return base64 (stringified) version of sha1 hash of array of bytes
 func shaString(buf []byte) string {
-	h := sha1.New()
-	h.Write(buf)
-	return base64.StdEncoding.EncodeToString(h.Sum(nil)[:])
+	h := sha1.Sum(buf)
+	return base64.StdEncoding.EncodeToString(h[:])
 }
 
 // Use rk fingerprints to chunkify array of data. Take the
@@ -98,4 +99,12 @@ func getBlock(key string) []byte {
 	return nil
 	// ...
 
+}
+
+func marshal(toMarshal interface{}) []byte {
+	if buf, err := json.MarshalIndent(toMarshal, "", " "); err == nil {
+		return buf
+	} else {
+		panic(fmt.Sprintf("Couldn't marshall %q\n", err))
+	}
 }
