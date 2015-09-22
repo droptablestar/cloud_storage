@@ -8,11 +8,10 @@ package main
 import (
 	//	Should be "github.com/mattn/go-getopt", but seems go
 	//	doesn't like to mix absolute and relative imports.
+	"bitbucket.org/jreeseue/818/p2/dfs"
 	"fmt"
 	"github.com/mattn/go-getopt"
 	"os"
-
-	"bitbucket.org/jreeseue/818/p2/dfs"
 )
 
 //=============================================================================

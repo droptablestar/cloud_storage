@@ -21,37 +21,27 @@ import (
 // ...   modified versions of your fuse call implementations from P1
 
 func (d *DNode) String() string {
-	// return fmt.Sprintf("nid: %d, Name: %s, attr: {%q}, dirty: %t, kids: %#v, data: %s\n",
-	// 	d.nid, d.Name, d.Attrs, d.dirty, d.kids, d.data)
-	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, ParentSig: %s, PrevSig: %s\n",
-		d.Version, d.Name, d.Attrs, d.ParentSig, d.PrevSig)
+	// return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, ParentSig: %s, PrevSig: %s\n",
+	// 	d.Version, d.Name, d.Attrs, d.ParentSig, d.PrevSig)
+	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, ParentSig: %s, PrevSig: %s, kids: %#v, data: [%s]\n",
+		d.Version, d.Name, d.Attrs, d.ParentSig, d.PrevSig, d.kids, d.data)
 }
 
-// type FS struct{}
-
-// var root *DNode
-
-// func (FS) Root() (fs.Node, error) {
-// 	root.Attrs.Inode = 1
-// 	return root, nil
-// }
-
 func (n *DNode) Attr(ctx context.Context, attr *fuse.Attr) error {
-	// p_out("attr %q <- \n%q\n\n", attr, n)
+	p_out("attr %q <- \n%q\n\n", attr, n)
 	*attr = n.Attrs
 	return nil
 }
 
 func (n *DNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error {
-	// p_out("getattr for %q in \n%q\n\n", req, n)
+	p_out("getattr for %q in \n%q\n\n", req, n)
 	resp.Attr = n.Attrs
 	return nil
 }
 
 func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
-	// p_out("attr for %q in \n%q\n\n", req, n)
+	p_out("attr for %q in \n%q\n\n", req, n)
 	// Setattr() should only be allowed to modify particular parts of a
-	// nodes attributes.
 	if req.Valid.Mode() {
 		n.Attrs.Mode = req.Mode
 	}
@@ -101,9 +91,9 @@ func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 }
 
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	// p_out("lookup for %q in \n%q\n\n", Name, n)
-	if child, ok := n.kids[name]; ok {
-		return child, nil
+	p_out("lookup for %q in \n%q\n\n", name, n)
+	if child, ok := n.ChildSigs[name]; ok {
+		return getDNode(child), nil
 	}
 	return nil, fuse.ENOENT
 }
@@ -121,49 +111,54 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 
 // TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	// p_out("readdirall for %q\n", n.name)
+	p_out("readdirall for %q\n", n.Name)
 	var dirDirs = []fuse.Dirent{}
-	for key, val := range n.kids {
+	for key, val := range n.ChildSigs {
+		cn := getDNode(val)
 		typ := fuse.DT_Unknown
-		if val.Attrs.Mode.IsDir() {
+		if cn.Attrs.Mode.IsDir() {
 			typ = fuse.DT_Dir
 		}
-		if val.Attrs.Mode.IsRegular() {
+
+		if cn.Attrs.Mode.IsRegular() {
 			typ = fuse.DT_File
 		}
 
-		if val.Attrs.Mode&os.ModeType == os.ModeSymlink {
+		if cn.Attrs.Mode&os.ModeType == os.ModeSymlink {
 			typ = fuse.DT_Link
 		}
 		dirDirs = append(dirDirs,
-			fuse.Dirent{Inode: val.Attrs.Inode, Type: typ, Name: key})
+			fuse.Dirent{Inode: cn.Attrs.Inode, Type: typ, Name: key})
 	}
 	return dirDirs, nil
 }
 
 func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
+	in()
+
 	p_out("create req: %q \nin %q\n\n", req, n)
 	f := new(DNode)
 	f.init(req.Name, req.Mode)
-	mF := marshal(f)
-	fSig := shaString(mF)
-	db.Put([]byte(fSig), mF, nil)
+	f.sig = shaString(marshal(f))
 
-	root.ChildSigs[req.Name] = fSig
 	nextInd++
-	root.Version = nextInd
-	mRoot := marshal(root)
-	rootSig := shaString(mRoot)
-	db.Put([]byte(rootSig), mRoot, nil)
+	n.Version = nextInd
+	n.ChildSigs[f.Name] = f.sig
+	putBlock(marshal(n))
 
-	head.Root = rootSig
-	mHead := marshal(head)
-	db.Put([]byte("head"), mHead, nil)
+	// f.ParentSig = nSig
+	f.parent = n
+	n.kids[req.Name] = f
 
+	// markDirty(f)
+
+	out()
 	return f, f, nil
 }
 
 func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
+	in()
+
 	p_out("write req: %q\nin %q\n", req, n)
 	olen := uint64(len(n.data))
 	wlen := uint64(len(req.Data))
@@ -179,46 +174,51 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 	resp.Size = copy(n.data[offset:], req.Data)
 	n.dirty = true
 
+	out()
 	return nil
 }
 
-func (n *DNode) ReadAll(ctx context.Context) ([]byte, error) {
+func (n *DNode) ReadAll(ctx context.Context) (b []byte, e error) {
+	in()
+
 	p_out("readall: %q\n\n", n)
-	return n.data, nil
+	for _, dblk := range n.DataBlocks {
+		b = append(b, getBlock(dblk)...)
+	}
+
+	out()
+	return b, nil
 }
 
 func (n *DNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
-	// p_out("fsync for %q\n", n)
+	p_out("fsync for %q\n", n)
 	return nil
 }
 
 func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
+	in()
+
 	p_out("flush %q \nin %q\n\n", req, n)
 	if n.dirty {
-		n.Version = nextInd
-		nDataSig := shaString(n.data)
-		db.Put([]byte(nDataSig), n.data, nil)
-		n.DataBlocks = append(n.DataBlocks, nDataSig)
-
-		mN := marshal(n)
-		nSig := shaString(mN)
-		db.Put([]byte(nSig), mN, nil)
-
-		root.ChildSigs[n.Name] = nSig
-		nextInd++
-		root.Version = nextInd
-		mRoot := marshal(root)
-		rootSig := shaString(mRoot)
-		db.Put([]byte(rootSig), mRoot, nil)
-
-		head.Root = rootSig
-		mHead := marshal(head)
-		db.Put([]byte("head"), mHead, nil)
-
 		n.Attrs.Atime = time.Now()
 		n.Attrs.Mtime = time.Now()
+		n.Version = nextInd
+		n.DataBlocks = append(n.DataBlocks, putBlocks(n.data)...)
+		nSig := putBlock(marshal(n))
+
+		n.parent.ChildSigs[n.Name] = nSig
+
+		nextInd++
+		n.parent.Version = nextInd
+		rSig := putBlock(marshal(n.parent))
+
+		head.Root = rSig
+		putBlockSig("head", marshal(head))
+
 		n.dirty = false
 	}
+
+	out()
 	return nil
 }
 

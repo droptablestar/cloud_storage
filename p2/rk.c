@@ -38,7 +38,6 @@ size_t rkchunk(uint8_t *buf, uint64_t len)
 
     if (!b) {
 	b = THE_PRIME;
-
 	b_n = 1;
 	for (i = 0; i < (HASHLEN-1); i++) {
 	    b_n *= b;
@@ -52,7 +51,6 @@ size_t rkchunk(uint8_t *buf, uint64_t len)
     for (off = 0; off < HASHLEN; off++) {
         hash = hash * b + (uint64_t)buf[off];
     }
-
     while (off < len) {
 	hash = (hash - saved[buf[off-HASHLEN]]) * b + buf[off];
 	off++;

@@ -81,16 +81,10 @@ type FS struct{}
 // Let one at a time in
 
 func getHead() (*DNode, uint64) {
-	if val, ok := db.Get([]byte("head"), nil); ok == nil {
+	if val, err := db.Get([]byte("head"), nil); err == nil {
 		p_out("FOUND HEAD!")
 		json.Unmarshal(val, &head)
-		p_out("head: %q\n", val)
-		if val, ok := db.Get([]byte(head.Root), nil); ok == nil {
-			p_out("root: %q\n", val)
-			var rt *DNode
-			json.Unmarshal(val, &rt)
-			return rt, head.NextInd
-		}
+		return getDNode(head.Root), head.NextInd
 	}
 	return nil, 0
 }
@@ -111,17 +105,17 @@ func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm s
 		p_out("GETHEAD fail\n")
 		root = new(DNode)
 		root.init("", os.ModeDir|0755)
-
-		mRoot := marshal(root)
-		rootSig := shaString(mRoot)
+		root.ParentSig = "head"
+		root.sig = putBlock(marshal(root))
+		root.metaDirty = true
 
 		head = new(Head)
-		head.Root = rootSig
+		head.Root = root.sig
 		head.NextInd = nextInd
-		mHead := marshal(head)
 
-		db.Put([]byte("head"), mHead, nil)
-		db.Put([]byte(rootSig), mRoot, nil)
+		if err := putBlockSig("head", marshal(head)); err != nil {
+			panic("FAIL: Couldn't insert head")
+		}
 	}
 	p_out("root inode %v", root.Attrs.Inode)
 
@@ -178,8 +172,7 @@ func Flusher(sem chan int) {
 		in()
 
 		// p_out("\n\tFLUSHER\n\n")
-
-		// ...
+		// flush(root)
 
 		out()
 	}
