@@ -19,11 +19,11 @@ import (
 )
 
 type DNode struct {
-	Name      string
-	Attrs     fuse.Attr
-	ParentSig string
-	Version   uint64
-	PrevSig   string
+	Name  string
+	Attrs fuse.Attr
+	// ParentSig string  // not needed?
+	Version uint64
+	PrevSig string
 
 	ChildSigs map[string]string
 
@@ -41,7 +41,7 @@ type DNode struct {
 func (d *DNode) init(name string, mode os.FileMode) {
 	startTime := time.Now()
 	d.Name = name
-	d.Version = nextInd
+	d.Version = version
 	d.ChildSigs = make(map[string]string)
 	d.Attrs = fuse.Attr{
 		Valid:  1 * time.Minute,
@@ -55,6 +55,7 @@ func (d *DNode) init(name string, mode os.FileMode) {
 		Uid:    uid,
 		Gid:    gid,
 	}
+	nextInd++
 	d.kids = make(map[string]*DNode)
 }
 
@@ -71,6 +72,7 @@ var gid = uint32(os.Getegid())
 var root *DNode
 var head *Head
 var nextInd uint64 = 1
+var version uint64 = 1
 var replicaID uint64
 
 var sem chan int
@@ -101,21 +103,22 @@ func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm s
 	if n, ni := getHead(); n != nil {
 		root = n
 		nextInd = ni
+		version = n.Version + 1
 	} else {
 		p_out("GETHEAD fail\n")
 		root = new(DNode)
 		root.init("", os.ModeDir|0755)
-		root.ParentSig = "head"
-		root.sig = putBlock(marshal(root))
-		root.metaDirty = true
+		// root.ParentSig = "head"
+		// root.sig = putBlock(marshal(root))
+		root.sig = shaString(marshal(root))
 
 		head = new(Head)
 		head.Root = root.sig
 		head.NextInd = nextInd
 
-		if err := putBlockSig("head", marshal(head)); err != nil {
-			panic("FAIL: Couldn't insert head")
-		}
+		// if err := putBlockSig("head", marshal(head)); err != nil {
+		// 	panic("FAIL: Couldn't insert head")
+		// }
 	}
 	p_out("root inode %v", root.Attrs.Inode)
 
@@ -170,9 +173,16 @@ func Flusher(sem chan int) {
 	for {
 		time.Sleep(5 * time.Second)
 		in()
-
 		// p_out("\n\tFLUSHER\n\n")
-		// flush(root)
+		if root.metaDirty {
+			p_out("FLUSHING\n")
+			flush(root)
+			version++
+
+			head.Root = root.sig
+			head.NextInd = nextInd
+			putBlockSig("head", marshal(head))
+		}
 
 		out()
 	}

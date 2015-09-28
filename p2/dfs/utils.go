@@ -143,19 +143,37 @@ func getDNode(sig string) *DNode {
 	n := new(DNode)
 	if val, err := db.Get([]byte(sig), nil); err == nil {
 		json.Unmarshal(val, &n)
+		n.kids = make(map[string]*DNode)
+		p_out("RETURN\n")
 		return n
 	} else {
-		panic(fmt.Sprintf("ERROR: getDNode [%s]\n", err))
+		p_err("ERROR: getDNode [%s]\n", err)
+		return nil
 	}
 }
 
 func markDirty(n *DNode) {
-	for ; n.ParentSig != "head"; n = n.parent {
+	for ; n.parent != nil; n = n.parent {
+		p_out("MARKING %q\n", n)
 		n.metaDirty = true
 	}
+	p_out("OUT MARKING %q\n", n)
 	n.metaDirty = true
 }
 
-func flush(n *DNode) {
-
+func flush(n *DNode) string {
+	for _, val := range n.kids {
+		if val.metaDirty {
+			// p_out("flush(): %q\n", val)
+			n.metaDirty = true // sanity check
+			n.ChildSigs[val.Name] = flush(val)
+		}
+	}
+	if n.metaDirty {
+		// p_out("flushing: %q\n", n)
+		n.Version = version
+		n.sig = putBlock(marshal(n))
+		n.metaDirty = false
+	}
+	return n.sig
 }

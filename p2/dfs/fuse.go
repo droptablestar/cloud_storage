@@ -23,24 +23,47 @@ import (
 func (d *DNode) String() string {
 	// return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, ParentSig: %s, PrevSig: %s\n",
 	// 	d.Version, d.Name, d.Attrs, d.ParentSig, d.PrevSig)
-	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, ParentSig: %s, PrevSig: %s, kids: %#v, data: [%s]\n",
-		d.Version, d.Name, d.Attrs, d.ParentSig, d.PrevSig, d.kids, d.data)
+	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, sig: [%q], parent: %q, meta: %t, kids: %#v, data: [%s]\n",
+		d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.sig, d.parent, d.metaDirty, d.kids, d.data)
+}
+
+func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
+	in()
+	p_out("Lookup for %q in \n%q\n\n", name, n)
+	if child, ok := n.kids[name]; ok { // in memory
+		p_out("IN MEMORY\n")
+		out()
+		return child, nil
+	}
+	if child, ok := n.ChildSigs[name]; ok { // not in memory
+		node := getDNode(child)
+		n.kids[name] = node
+		out()
+		return node, nil
+	}
+	out()
+	return nil, fuse.ENOENT // doesn't exist
 }
 
 func (n *DNode) Attr(ctx context.Context, attr *fuse.Attr) error {
-	p_out("attr %q <- \n%q\n\n", attr, n)
+	in()
+	p_out("Attr %q <- \n%q\n\n", attr, n)
 	*attr = n.Attrs
+	out()
 	return nil
 }
 
 func (n *DNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error {
-	p_out("getattr for %q in \n%q\n\n", req, n)
+	in()
+	p_out("Getattr for %q in \n%q\n\n", req, n)
 	resp.Attr = n.Attrs
+	out()
 	return nil
 }
 
 func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
-	p_out("attr for %q in \n%q\n\n", req, n)
+	in()
+	p_out("Setattr for %q in \n%q\n\n", req, n)
 	// Setattr() should only be allowed to modify particular parts of a
 	if req.Valid.Mode() {
 		n.Attrs.Mode = req.Mode
@@ -87,70 +110,76 @@ func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 	// }
 	resp.Attr = n.Attrs
 
+	out()
 	return nil
 }
 
-func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	p_out("lookup for %q in \n%q\n\n", name, n)
-	if child, ok := n.ChildSigs[name]; ok {
-		return getDNode(child), nil
-	}
-	return nil, fuse.ENOENT
-}
-
-// Cut and paste :-P
 func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
-	p_out("mkdir %q in \n%q\n\n", req, n.Name)
+	in()
+	p_out("Mkdir %q in \n%q\n\n", req, n)
 	d := new(DNode)
 	d.init(req.Name, req.Mode)
+	d.Attrs.Uid = req.Header.Uid
+	d.Attrs.Gid = req.Header.Gid
+	d.sig = shaString(marshal(d))
+	d.parent = n
+
 	n.kids[req.Name] = d
-	n.Attrs.Uid = req.Header.Uid
-	n.Attrs.Gid = req.Header.Gid
+	// n.ChildSigs[req.Name] = d.sig
+
+	markDirty(d)
+
+	out()
 	return d, nil
 }
 
 // TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	p_out("readdirall for %q\n", n.Name)
+	in()
+	p_out("Readdirall for %q\n", n)
 	var dirDirs = []fuse.Dirent{}
-	for key, val := range n.ChildSigs {
-		cn := getDNode(val)
-		typ := fuse.DT_Unknown
-		if cn.Attrs.Mode.IsDir() {
-			typ = fuse.DT_Dir
-		}
-
-		if cn.Attrs.Mode.IsRegular() {
-			typ = fuse.DT_File
-		}
-
-		if cn.Attrs.Mode&os.ModeType == os.ModeSymlink {
-			typ = fuse.DT_Link
-		}
-		dirDirs = append(dirDirs,
-			fuse.Dirent{Inode: cn.Attrs.Inode, Type: typ, Name: key})
+	for _, val := range n.kids {
+		dirDirs = append(dirDirs, addDirEnt(val))
 	}
+	for key, val := range n.ChildSigs {
+		if _, ok := n.kids[key]; !ok {
+			cn := getDNode(val)
+			dirDirs = append(dirDirs, addDirEnt(cn))
+		}
+	}
+	out()
 	return dirDirs, nil
+}
+
+func addDirEnt(n *DNode) fuse.Dirent {
+	typ := fuse.DT_Unknown
+	if n.Attrs.Mode.IsDir() {
+		typ = fuse.DT_Dir
+	}
+
+	if n.Attrs.Mode.IsRegular() {
+		typ = fuse.DT_File
+	}
+
+	if n.Attrs.Mode&os.ModeType == os.ModeSymlink {
+		typ = fuse.DT_Link
+	}
+
+	return fuse.Dirent{Inode: n.Attrs.Inode, Type: typ, Name: n.Name}
 }
 
 func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
 	in()
-
-	p_out("create req: %q \nin %q\n\n", req, n)
+	p_out("Create req: %q \nin %q\n\n", req, n)
 	f := new(DNode)
 	f.init(req.Name, req.Mode)
 	f.sig = shaString(marshal(f))
-
-	nextInd++
-	n.Version = nextInd
-	n.ChildSigs[f.Name] = f.sig
-	putBlock(marshal(n))
-
-	// f.ParentSig = nSig
 	f.parent = n
+
+	// n.ChildSigs[f.Name] = f.sig
 	n.kids[req.Name] = f
 
-	// markDirty(f)
+	markDirty(f)
 
 	out()
 	return f, f, nil
@@ -158,8 +187,7 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	in()
-
-	p_out("write req: %q\nin %q\n", req, n)
+	p_out("Write req: %q\nin %q\n", req, n)
 	olen := uint64(len(n.data))
 	wlen := uint64(len(req.Data))
 	offset := uint64(req.Offset)
@@ -180,8 +208,7 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 
 func (n *DNode) ReadAll(ctx context.Context) (b []byte, e error) {
 	in()
-
-	p_out("readall: %q\n\n", n)
+	p_out("Readall: %q\n\n", n)
 	for _, dblk := range n.DataBlocks {
 		b = append(b, getBlock(dblk)...)
 	}
@@ -191,14 +218,15 @@ func (n *DNode) ReadAll(ctx context.Context) (b []byte, e error) {
 }
 
 func (n *DNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
+	in()
 	p_out("fsync for %q\n", n)
+	out()
 	return nil
 }
 
 func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	in()
-
-	p_out("flush %q \nin %q\n\n", req, n)
+	p_out("Flush %q \nin %q\n\n", req, n)
 	if n.dirty {
 		n.Attrs.Atime = time.Now()
 		n.Attrs.Mtime = time.Now()
@@ -217,37 +245,43 @@ func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 
 		n.dirty = false
 	}
-
 	out()
 	return nil
 }
 
 func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-	p_out("remove %q from \n%q \n\n", req, n)
+	in()
+	p_out("Remove %q from \n%q \n\n", req, n)
 	// If the DNode exists...delete it.
 	if val, ok := n.kids[req.Name]; ok {
 		if val.Attrs.Mode&os.ModeType == os.ModeSymlink {
 			n.Attrs.Nlink -= 1
 		}
 		delete(n.kids, req.Name)
+		out()
 		return nil
 	}
+	out()
 	return fuse.ENOENT
 }
 
 func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
+	in()
 	p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
 	if outDir, ok := newDir.(*DNode); ok {
 		n.kids[req.OldName].Name = req.NewName
 		outDir.kids[req.NewName] = n.kids[req.OldName]
 		delete(n.kids, req.OldName)
+		out()
 		return nil
 	}
+	out()
 	return fuse.ENOENT
 }
 
 func (n *DNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
-	p_out("symlink: \nreq: %q \nn: %q\n\n", req, n)
+	in()
+	p_out("Symlink: \nreq: %q \nn: %q\n\n", req, n)
 	link := *new(DNode)
 	link.Attrs = *new(fuse.Attr)
 	// for some reason redis was trying to link to a file that didn't exist
@@ -256,22 +290,28 @@ func (n *DNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node,
 		n.Attrs.Nlink += 1
 		n.kids[req.NewName] = &link
 
+		out()
 		return &link, nil
 	}
+	out()
 	return nil, fuse.ENOENT
 }
 
 func (n *DNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
-	p_out("readlink: \nreq: %q \nn: %q\n\n", req, n)
+	in()
+	p_out("Readlink: \nreq: %q \nn: %q\n\n", req, n)
+	out()
 	return n.Name, nil
 }
 
 func (n *DNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
-	p_out("link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
+	in()
+	p_out("Link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
 	if oldDir, ok := old.(*DNode); ok {
 		n.kids[req.NewName] = oldDir
 		return oldDir, nil
 	}
+	out()
 	return nil, fuse.ENOENT
 }
 
