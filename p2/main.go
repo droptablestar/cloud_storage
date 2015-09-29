@@ -26,7 +26,7 @@ func main() {
 	newfs := ""
 
 	for {
-		if c = getopt.Getopt("cdnm:s:"); c == getopt.EOF {
+		if c = getopt.Getopt("cdnm:s:t:"); c == getopt.EOF {
 			break
 		}
 

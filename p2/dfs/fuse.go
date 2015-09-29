@@ -28,14 +28,14 @@ func (d *DNode) String() string {
 
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	in()
-	p_out("Lookup for %q in \n%q\n", name, n)
+	// p_out("Lookup for %q in \n%q\n", name, n)
 	if child, ok := n.kids[name]; ok { // in memory
-		p_out("IN MEMORY\n\n")
+		// p_out("IN MEMORY\n\n")
 		out()
 		return child, nil
 	}
 	if child, ok := n.ChildSigs[name]; ok { // not in memory
-		p_out("ON DISK\n\n")
+		// p_out("ON DISK\n\n")
 		node := getDNode(child)
 		node.parent = n
 		node.sig = child
@@ -43,7 +43,6 @@ func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 		out()
 		return node, nil
 	}
-	p_out("\n")
 	out()
 	return nil, fuse.ENOENT // doesn't exist
 }
@@ -168,7 +167,6 @@ func addDirEnt(n *DNode) fuse.Dirent {
 	if n.Attrs.Mode&os.ModeType == os.ModeSymlink {
 		typ = fuse.DT_Link
 	}
-
 	return fuse.Dirent{Inode: n.Attrs.Inode, Type: typ, Name: n.Name}
 }
 
@@ -215,10 +213,8 @@ func (n *DNode) ReadAll(ctx context.Context) (b []byte, e error) {
 	in()
 	p_out("Readall: %q\n\n", n)
 	for _, dblk := range n.DataBlocks {
-		p_out("IN: [%s]\n", getBlock(dblk))
 		b = append(b, getBlock(dblk)...)
 	}
-	p_out("b: [%s]\n", b)
 	out()
 	return b, nil
 }
@@ -246,8 +242,9 @@ func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	return nil
 }
 
-func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
+func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error) {
 	in()
+	err = fuse.ENOENT
 	p_out("Remove %q from \n%q \n\n", req, n)
 	// If the DNode exists...delete it.
 	if val, ok := n.kids[req.Name]; ok {
@@ -255,20 +252,32 @@ func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 			n.Attrs.Nlink -= 1
 		}
 		delete(n.kids, req.Name)
-		out()
-		return nil
+		err = nil
+	}
+	if _, ok := n.ChildSigs[req.Name]; ok {
+		delete(n.ChildSigs, req.Name)
+		err = nil
+	}
+	if err == nil {
+		markDirty(n)
 	}
 	out()
-	return fuse.ENOENT
+	return
 }
 
 func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
 	in()
-	p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, newDir)
 	if outDir, ok := newDir.(*DNode); ok {
+		p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, outDir)
+
 		n.kids[req.OldName].Name = req.NewName
 		outDir.kids[req.NewName] = n.kids[req.OldName]
+
 		delete(n.kids, req.OldName)
+		delete(n.ChildSigs, req.OldName)
+		markDirty(n)
+		markDirty(outDir.kids[req.NewName])
+
 		out()
 		return nil
 	}

@@ -126,7 +126,6 @@ func putBlockSig(s string, data []byte) error {
 // []byte or nil
 func getBlock(key string) []byte {
 	if val, err := db.Get([]byte(key), nil); err == nil {
-		p_out("VAL: [%s]\n", val)
 		return val
 	}
 	return nil
@@ -164,13 +163,13 @@ func markDirty(n *DNode) {
 func flush(n *DNode) string {
 	for _, val := range n.kids {
 		if val.metaDirty {
-			// p_out("flush(): %q\n", val)
+			p_out("flush(): %q\n", val)
 			n.metaDirty = true // sanity check
 			n.ChildSigs[val.Name] = flush(val)
 		}
 	}
 	if n.metaDirty {
-		// p_out("flushing: %q\n", n)
+		p_out("flushing: %q\n", n)
 		n.Version = version
 		n.sig = putBlock(marshal(n))
 		n.metaDirty = false

@@ -1,4 +1,3 @@
-//
 package dfs
 
 /*
@@ -176,6 +175,7 @@ func Flusher(sem chan int) {
 		// p_out("\n\tFLUSHER\n\n")
 		if root.metaDirty {
 			p_out("FLUSHING\n")
+			root.Attrs.Atime = time.Now()
 			flush(root)
 			version++
 
