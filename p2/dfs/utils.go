@@ -100,8 +100,8 @@ func putBlocks(data []byte) (s []string) {
 	off := 0
 	for off < len(data) {
 		ret := rkChunk(data[off:])
-		p_out("offset: %d, length: %d\n", off, ret)
-		s = append(s, putBlock(data[off:(off+ret-1)]))
+		// p_out("offset: %d, length: %d\n", off, ret)
+		s = append(s, putBlock(data[off:(off+ret)]))
 		off += ret
 	}
 	return
@@ -126,6 +126,7 @@ func putBlockSig(s string, data []byte) error {
 // []byte or nil
 func getBlock(key string) []byte {
 	if val, err := db.Get([]byte(key), nil); err == nil {
+		p_out("VAL: [%s]\n", val)
 		return val
 	}
 	return nil
@@ -144,7 +145,6 @@ func getDNode(sig string) *DNode {
 	if val, err := db.Get([]byte(sig), nil); err == nil {
 		json.Unmarshal(val, &n)
 		n.kids = make(map[string]*DNode)
-		p_out("RETURN\n")
 		return n
 	} else {
 		p_err("ERROR: getDNode [%s]\n", err)
@@ -154,10 +154,10 @@ func getDNode(sig string) *DNode {
 
 func markDirty(n *DNode) {
 	for ; n.parent != nil; n = n.parent {
-		p_out("MARKING %q\n", n)
+		// p_out("MARKING %q\n", n)
 		n.metaDirty = true
 	}
-	p_out("OUT MARKING %q\n", n)
+	// p_out("OUT MARKING %q\n", n)
 	n.metaDirty = true
 }
 

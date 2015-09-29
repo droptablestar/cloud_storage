@@ -1,4 +1,3 @@
-//
 package dfs
 
 /*
@@ -23,24 +22,28 @@ import (
 func (d *DNode) String() string {
 	// return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, ParentSig: %s, PrevSig: %s\n",
 	// 	d.Version, d.Name, d.Attrs, d.ParentSig, d.PrevSig)
-	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, sig: [%q], parent: %q, meta: %t, kids: %#v, data: [%s]\n",
-		d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.sig, d.parent, d.metaDirty, d.kids, d.data)
+	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, DataBlocks: %#v, sig: [%q], parent: %q, meta: %t, kids: %#v, data: [%s]\n",
+		d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.DataBlocks, d.sig, d.parent, d.metaDirty, d.kids, d.data)
 }
 
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	in()
-	p_out("Lookup for %q in \n%q\n\n", name, n)
+	p_out("Lookup for %q in \n%q\n", name, n)
 	if child, ok := n.kids[name]; ok { // in memory
-		p_out("IN MEMORY\n")
+		p_out("IN MEMORY\n\n")
 		out()
 		return child, nil
 	}
 	if child, ok := n.ChildSigs[name]; ok { // not in memory
+		p_out("ON DISK\n\n")
 		node := getDNode(child)
+		node.parent = n
+		node.sig = child
 		n.kids[name] = node
 		out()
 		return node, nil
 	}
+	p_out("\n")
 	out()
 	return nil, fuse.ENOENT // doesn't exist
 }
@@ -136,7 +139,7 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 // TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	in()
-	p_out("Readdirall for %q\n", n)
+	p_out("Readdirall for %q\n\n", n)
 	var dirDirs = []fuse.Dirent{}
 	for _, val := range n.kids {
 		dirDirs = append(dirDirs, addDirEnt(val))
@@ -151,6 +154,7 @@ func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	return dirDirs, nil
 }
 
+// helper function for adding directory entries
 func addDirEnt(n *DNode) fuse.Dirent {
 	typ := fuse.DT_Unknown
 	if n.Attrs.Mode.IsDir() {
@@ -187,7 +191,7 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	in()
-	p_out("Write req: %q\nin %q\n", req, n)
+	p_out("Write req: %q\nin %q\n\n", req, n)
 	olen := uint64(len(n.data))
 	wlen := uint64(len(req.Data))
 	offset := uint64(req.Offset)
@@ -201,6 +205,7 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 	}
 	resp.Size = copy(n.data[offset:], req.Data)
 	n.dirty = true
+	markDirty(n)
 
 	out()
 	return nil
@@ -210,16 +215,17 @@ func (n *DNode) ReadAll(ctx context.Context) (b []byte, e error) {
 	in()
 	p_out("Readall: %q\n\n", n)
 	for _, dblk := range n.DataBlocks {
+		p_out("IN: [%s]\n", getBlock(dblk))
 		b = append(b, getBlock(dblk)...)
 	}
-
+	p_out("b: [%s]\n", b)
 	out()
 	return b, nil
 }
 
 func (n *DNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
 	in()
-	p_out("fsync for %q\n", n)
+	p_out("fsync for %q\n\n", n)
 	out()
 	return nil
 }
@@ -228,20 +234,11 @@ func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	in()
 	p_out("Flush %q \nin %q\n\n", req, n)
 	if n.dirty {
+		p_out("DIRTY\n")
 		n.Attrs.Atime = time.Now()
 		n.Attrs.Mtime = time.Now()
-		n.Version = nextInd
-		n.DataBlocks = append(n.DataBlocks, putBlocks(n.data)...)
-		nSig := putBlock(marshal(n))
-
-		n.parent.ChildSigs[n.Name] = nSig
-
-		nextInd++
-		n.parent.Version = nextInd
-		rSig := putBlock(marshal(n.parent))
-
-		head.Root = rSig
-		putBlockSig("head", marshal(head))
+		n.DataBlocks = putBlocks(n.data)
+		n.sig = shaString(marshal(n))
 
 		n.dirty = false
 	}
