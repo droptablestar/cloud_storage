@@ -64,6 +64,9 @@ func (n *DNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fus
 }
 
 func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+	if inPast {
+		return fuse.EPERM
+	}
 	in()
 	p_out("Setattr for %q in \n%q\n\n", req, n)
 	// Setattr() should only be allowed to modify particular parts of a
@@ -117,6 +120,9 @@ func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 }
 
 func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
+	if inPast {
+		return nil, fuse.EPERM
+	}
 	in()
 	p_out("Mkdir %q in \n%q\n\n", req, n)
 	d := new(DNode)
@@ -171,6 +177,9 @@ func addDirEnt(n *DNode) fuse.Dirent {
 }
 
 func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
+	if inPast {
+		return nil, nil, fuse.EPERM
+	}
 	in()
 	p_out("Create req: %q \nin %q\n\n", req, n)
 	f := new(DNode)
@@ -188,6 +197,9 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 }
 
 func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
+	if inPast {
+		return fuse.EPERM
+	}
 	in()
 	p_out("Write req: %q\nin %q\n\n", req, n)
 	olen := uint64(len(n.data))
@@ -243,6 +255,9 @@ func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 }
 
 func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error) {
+	if inPast {
+		return fuse.EPERM
+	}
 	in()
 	err = fuse.ENOENT
 	p_out("Remove %q from \n%q \n\n", req, n)
@@ -266,6 +281,9 @@ func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error)
 }
 
 func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
+	if inPast {
+		return fuse.EPERM
+	}
 	in()
 	if outDir, ok := newDir.(*DNode); ok {
 		p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, outDir)

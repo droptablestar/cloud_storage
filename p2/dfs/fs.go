@@ -65,6 +65,7 @@ type Head struct {
 }
 
 var debug = false
+var tmStr = ""
 var compress = false
 var uid = uint32(os.Geteuid())
 var gid = uint32(os.Getegid())
@@ -73,7 +74,7 @@ var head *Head
 var nextInd uint64 = 1
 var version uint64 = 1
 var replicaID uint64
-
+var inPast = false
 var sem chan int
 
 type FS struct{}
@@ -85,7 +86,29 @@ func getHead() (*DNode, uint64) {
 	if val, err := db.Get([]byte("head"), nil); err == nil {
 		p_out("FOUND HEAD!")
 		json.Unmarshal(val, &head)
-		return getDNode(head.Root), head.NextInd
+		if tmStr == "" {
+			return getDNode(head.Root), head.NextInd
+		}
+		tmTime, err := time.Parse("2006-01-02T15:04:05", tmStr)
+		if err != nil {
+			panic(err)
+		}
+		p_out("%q\n", tmTime)
+
+		root = getDNode(head.Root)
+		if tmTime.After(root.Attrs.Atime) {
+			return root, head.NextInd
+		}
+		for root.PrevSig != "" {
+			inPast = true
+			preRoot := getDNode(root.PrevSig)
+			if tmTime.After(preRoot.Attrs.Atime) &&
+				tmTime.Before(root.Attrs.Atime) {
+				return root, 0
+			}
+			root = preRoot
+		}
+		return root, 0
 	}
 	return nil, 0
 }
@@ -94,6 +117,7 @@ func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm s
 	// Initialize a new diskv store, rooted at "my-data-dir", with a 1MB cache.
 
 	debug = dbg
+	tmStr = tm
 	compress = cmp
 	initStore(newfs, dbPath)
 
@@ -101,24 +125,19 @@ func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm s
 
 	if n, ni := getHead(); n != nil {
 		root = n
+		root.sig = head.Root
 		nextInd = ni
 		version = n.Version + 1
 	} else {
 		p_out("GETHEAD fail\n")
 		root = new(DNode)
 		root.init("", os.ModeDir|0755)
-		// root.ParentSig = "head"
-		// root.sig = putBlock(marshal(root))
-		root.sig = shaString(marshal(root))
 
 		head = new(Head)
 		head.Root = root.sig
 		head.NextInd = nextInd
-
-		// if err := putBlockSig("head", marshal(head)); err != nil {
-		// 	panic("FAIL: Couldn't insert head")
-		// }
 	}
+	p_out("root %q", root)
 	p_out("root inode %v", root.Attrs.Inode)
 
 	p_out("compress: %t\n", compress)
@@ -176,6 +195,7 @@ func Flusher(sem chan int) {
 		if root.metaDirty {
 			p_out("FLUSHING\n")
 			root.Attrs.Atime = time.Now()
+			root.PrevSig = root.sig
 			flush(root)
 			version++
 
