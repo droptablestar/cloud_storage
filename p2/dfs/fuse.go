@@ -20,10 +20,10 @@ import (
 // ...   modified versions of your fuse call implementations from P1
 
 func (d *DNode) String() string {
-	// return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, ParentSig: %s, PrevSig: %s\n",
-	// 	d.Version, d.Name, d.Attrs, d.ParentSig, d.PrevSig)
-	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, DataBlocks: %#v, sig: [%q], parent: %q, meta: %t, kids: %#v, data: [%s]\n",
-		d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.DataBlocks, d.sig, d.parent, d.metaDirty, d.kids, d.data)
+	// return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, DataBlocks: %#v, sig: [%q], parent: %q, meta: %t, kids: %#v, data: [%s]\n",
+	// 	d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.DataBlocks, d.sig, d.parent, d.metaDirty, d.kids, d.data)
+	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, DataBlocks: %#v, sig: [%q], parent: %q, meta: %t, kids: %#v\n",
+		d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.DataBlocks, d.sig, d.parent, d.metaDirty, d.kids)
 }
 
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
@@ -208,6 +208,7 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 	limit := offset + wlen
 
 	if limit > olen {
+		n.data = n.readall()
 		t := make([]byte, limit)
 		copy(t, n.data)
 		n.data = t
@@ -224,11 +225,16 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 func (n *DNode) ReadAll(ctx context.Context) (b []byte, e error) {
 	in()
 	p_out("Readall: %q\n\n", n)
+	b = n.readall()
+	out()
+	return b, nil
+}
+
+func (n *DNode) readall() (b []byte) {
 	for _, dblk := range n.DataBlocks {
 		b = append(b, getBlock(dblk)...)
 	}
-	out()
-	return b, nil
+	return
 }
 
 func (n *DNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
@@ -245,6 +251,7 @@ func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 		p_out("DIRTY\n")
 		n.Attrs.Atime = time.Now()
 		n.Attrs.Mtime = time.Now()
+		p_out("\nDATA:\n%q\n\n", n.data)
 		n.DataBlocks = putBlocks(n.data)
 		n.sig = shaString(marshal(n))
 
