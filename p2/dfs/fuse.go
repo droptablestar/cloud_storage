@@ -187,7 +187,6 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 	f.sig = shaString(marshal(f))
 	f.parent = n
 
-	// n.ChildSigs[f.Name] = f.sig
 	n.kids[req.Name] = f
 
 	markDirty(f)
@@ -208,7 +207,10 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 	limit := offset + wlen
 
 	if limit > olen {
-		n.data = n.readall()
+		if n.Attrs.Size > uint64(len(n.data)) {
+			n.data = n.readall()
+		}
+		// n.data = n.readall()
 		t := make([]byte, limit)
 		copy(t, n.data)
 		n.data = t
