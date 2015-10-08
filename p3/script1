@@ -1,0 +1,29 @@
+mkdir foo
+echo "nice" > foo/f1
+sleep 30
+
+echo "cp foo/f1 foo/f2"
+cp foo/f1 foo/f2
+sleep 30
+
+echo "cp foo/f1 foo/f3"
+cp foo/f1 foo/f3
+sleep 30
+
+ls -l foo
+
+mkdir "foo@-70s"
+
+set x = `date "+%s"`
+
+@ x2 = $x - 70
+set x2date = `date -d "1970-01-01 $x2 sec GMT" "+%Y-%m-%d %H:%M:%S"`
+mkdir "foo@$x2date"
+ls  "foo@$x2date"
+
+@ x1 = $x - 40
+set x1date = `date -d "1970-01-01 $x1 sec GMT" "+%Y-%m-%d %H:%M:%S"`
+mkdir "foo@$x1date"
+ls  "foo@$x1date"
+
+ls -l */f*

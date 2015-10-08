@@ -1,0 +1,9 @@
+echo "nice" > food
+cp food bar
+sleep 10
+cat food >> bar
+sleep 10
+cat food >> bar
+sleep 10
+mkdir bar@versions
+ls -l bar@versions
