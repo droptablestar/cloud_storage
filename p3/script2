@@ -1,3 +1,5 @@
+#!/bin/tcsh -f
+
 echo "nice" > food
 cp food bar
 sleep 10

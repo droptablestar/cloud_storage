@@ -1,14 +1,16 @@
+#!/bin/tcsh -f
+
 mkdir foo
 echo "nice" > foo/f1
-sleep 30
+# sleep 30
 
 echo "cp foo/f1 foo/f2"
 cp foo/f1 foo/f2
-sleep 30
+# sleep 30
 
 echo "cp foo/f1 foo/f3"
 cp foo/f1 foo/f3
-sleep 30
+# sleep 30
 
 ls -l foo
 
