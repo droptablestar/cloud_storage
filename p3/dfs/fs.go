@@ -18,14 +18,11 @@ import (
 )
 
 type DNode struct {
-	Name  string
-	Attrs fuse.Attr
-	// ParentSig string  // not needed?
-	Version uint64
-	PrevSig string
-
-	ChildSigs map[string]string
-
+	Name       string
+	Attrs      fuse.Attr
+	Version    uint64
+	PrevSig    string
+	ChildSigs  map[string]string
 	DataBlocks []string
 
 	sig       string
@@ -33,6 +30,7 @@ type DNode struct {
 	metaDirty bool
 	expanded  bool
 	parent    *DNode
+	archive   bool
 	kids      map[string]*DNode
 	data      []byte
 }
@@ -74,7 +72,7 @@ var head *Head
 var nextInd uint64 = 1
 var version uint64 = 1
 var replicaID uint64
-var inPast = false
+var inPast bool
 var sem chan int
 
 type FS struct{}
@@ -100,8 +98,8 @@ func getHead() (*DNode, uint64) {
 		if tmTime.After(root.Attrs.Atime) {
 			return root, head.NextInd
 		}
-		inPast = true
 		root = root.timeTravel(tmTime)
+		inPast = true
 		return root, 0
 	}
 	return nil, 0
