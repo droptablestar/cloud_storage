@@ -130,22 +130,24 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 	}
 	split := strings.Split(req.Name, "@")
 	if len(split) > 1 {
-		if _, ok := n.ChildSigs[split[0]]; ok {
+		p_out("SPLIT\n")
+		p_out("split %q\n", split)
+		if _, ok := n.ChildSigs[split[0]]; !ok {
+			p_out("split[0] %q\n", split[0])
+			p_out("children: %q\n", n.ChildSigs)
 			return nil, fuse.ENOENT
 		}
 		var tm time.Time
 		var ok bool
-		if tm, ok = peteTime(split[1]); !ok {
+		if tm, ok = peteTime(split[1]); ok {
 			var td time.Duration
 			var err error
 			if td, err = time.ParseDuration(split[1]); err != nil {
-				return nil, fuse.EPERM
+				return nil, fuse.ENOENT
 			}
 			tm = time.Now().Add(td)
-			p_out("%s\n", tm)
-			return nil, fuse.ENOENT
+			p_out("tm %s\n", tm)
 		}
-		p_out("HERE\n")
 		tN := getDNode(n.ChildSigs[split[0]]).timeTravel(tm)
 		tN.Name = req.Name
 		tN.metaDirty = false
