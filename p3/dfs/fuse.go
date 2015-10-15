@@ -29,7 +29,7 @@ func (d *DNode) String() string {
 
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	in()
-	p_out("Lookup for %q in \n%q\n", name, n)
+	// p_out("Lookup for %q in \n%q\n", name, n)
 	if child, ok := n.kids[name]; ok { // in memory
 		// p_out("IN MEMORY\n\n")
 		out()
@@ -130,10 +130,22 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 	}
 	split := strings.Split(req.Name, "@")
 	if len(split) > 1 {
-		if _, ok := n.ChildSigs[split[0]]; !ok {
+		if _, ok := n.ChildSigs[split[0]]; ok {
 			return nil, fuse.ENOENT
 		}
-		tm, _ := peteTime(split[1])
+		var tm time.Time
+		var ok bool
+		if tm, ok = peteTime(split[1]); !ok {
+			var td time.Duration
+			var err error
+			if td, err = time.ParseDuration(split[1]); err != nil {
+				return nil, fuse.EPERM
+			}
+			tm = time.Now().Add(td)
+			p_out("%s\n", tm)
+			return nil, fuse.ENOENT
+		}
+		p_out("HERE\n")
 		tN := getDNode(n.ChildSigs[split[0]]).timeTravel(tm)
 		tN.Name = req.Name
 		tN.metaDirty = false
