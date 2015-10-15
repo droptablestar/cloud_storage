@@ -146,9 +146,12 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 				return nil, fuse.ENOENT
 			}
 			tm = time.Now().Add(td)
-			p_out("tm %s\n", tm)
+			p_out("now: %s, tm: %s\n", time.Now(), tm)
 		}
-		tN := getDNode(n.ChildSigs[split[0]]).timeTravel(tm)
+		var tN *DNode
+		if tN = getDNode(n.ChildSigs[split[0]]).timeTravel(tm); tN == nil {
+			return nil, fuse.ENOENT
+		}
 		tN.Name = req.Name
 		tN.metaDirty = false
 		tN.archive = true

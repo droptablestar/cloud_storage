@@ -212,12 +212,12 @@ func (top *DNode) timeTravel(tm time.Time) *DNode {
 			break
 		}
 		// p_out("preTop: %d, top: %d\n", preTop.Version, top.Version)
-		// p_out("preTop: %s, top: %s\n", preTop.Attrs.Atime, top.Attrs.Atime)
-		// p_out("preTop: %t, top: %t\n",
-		// tm.After(preTop.Attrs.Atime), tm.Before(top.Attrs.Atime))
+		p_out("preTop: %s, top: %s\n", preTop.Attrs.Atime, top.Attrs.Atime)
+		p_out("preTop: %t, top: %t\n",
+			tm.After(preTop.Attrs.Atime), tm.Before(top.Attrs.Atime))
 		if tm.After(preTop.Attrs.Atime) &&
 			tm.Before(top.Attrs.Atime) {
-			return top
+			return preTop
 		}
 		top = preTop
 	}
