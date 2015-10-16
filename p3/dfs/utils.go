@@ -181,8 +181,8 @@ func flush(n *DNode) string {
 		n.Attrs.Atime = time.Now()
 		n.Attrs.Mtime = time.Now()
 		n.Version = version
-		n.PrevSig = n.sig
-		n.sig = putBlock(marshal(n))
+		n.PrevSig = putBlock(marshal(n))
+		n.sig = n.PrevSig
 		n.metaDirty = false
 	}
 	return n.sig

@@ -187,11 +187,11 @@ func Flusher(sem chan int) {
 		if root.metaDirty {
 			// p_out("FLUSHING\n")
 			root.Attrs.Atime = time.Now()
-			root.PrevSig = root.sig
+			// root.PrevSig = root.sig
 			flush(root)
 			version++
 
-			head.Root = root.sig
+			head.Root = root.PrevSig
 			head.NextInd = nextInd
 			putBlockSig("head", marshal(head))
 		}

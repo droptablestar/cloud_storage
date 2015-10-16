@@ -116,6 +116,7 @@ func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 	// 	return fl&SetattrBkuptime != 0
 	// }
 	resp.Attr = n.Attrs
+	n.sig = shaString(marshal(n))
 
 	out()
 	return nil
@@ -130,12 +131,23 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 	}
 	split := strings.Split(req.Name, "@")
 	if len(split) > 1 {
-		p_out("SPLIT\n")
-		p_out("split %q\n", split)
 		if _, ok := n.ChildSigs[split[0]]; !ok {
-			p_out("split[0] %q\n", split[0])
-			p_out("children: %q\n", n.ChildSigs)
+			out()
 			return nil, fuse.ENOENT
+		}
+		if split[1] == "versions" {
+			d := new(DNode)
+			d.init(req.Name, req.Mode)
+			d.Attrs.Uid = req.Header.Uid
+			d.Attrs.Gid = req.Header.Gid
+			d.archive = true
+			p_out("PRE kids: %q\n", d.kids)
+			d.kids = getPrevs(getDNode(n.ChildSigs[split[0]]), d.kids)
+			p_out("d POST kids: %q\n\n", d.kids)
+			n.kids[req.Name] = d
+			p_out("n POST kids: %q\n\n", n.kids)
+			out()
+			return d, nil
 		}
 		var tm time.Time
 		var ok bool
@@ -143,6 +155,7 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 			var td time.Duration
 			var err error
 			if td, err = time.ParseDuration(split[1]); err != nil {
+				out()
 				return nil, fuse.ENOENT
 			}
 			tm = time.Now().Add(td)
@@ -150,6 +163,7 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 		}
 		var tN *DNode
 		if tN = getDNode(n.ChildSigs[split[0]]).timeTravel(tm); tN == nil {
+			out()
 			return nil, fuse.ENOENT
 		}
 		tN.Name = req.Name
@@ -173,6 +187,17 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 
 	out()
 	return d, nil
+}
+
+func getPrevs(n *DNode, m map[string]*DNode) map[string]*DNode {
+	p_out("getPrevs: n: %s\n", n)
+	n.Name = fmt.Sprintf("%s.%s", n.Name, n.Attrs.Atime.Format("2006-1-2 15:04:05"))
+	m[n.Name] = n
+	prev := getDNode(n.PrevSig)
+	if prev != nil {
+		return getPrevs(prev, m)
+	}
+	return m
 }
 
 // TODO: This seems verbose. Can I find a better way to copy the data out?
@@ -255,6 +280,7 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 		n.Attrs.Size = limit
 	}
 	resp.Size = copy(n.data[offset:], req.Data)
+	n.sig = shaString(marshal(n))
 	n.dirty = true
 	markDirty(n)
 
@@ -317,6 +343,7 @@ func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error)
 	}
 	if _, ok := n.ChildSigs[req.Name]; ok {
 		delete(n.ChildSigs, req.Name)
+		n.sig = shaString(marshal(n))
 		err = nil
 	}
 	if err == nil {
