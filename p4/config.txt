@@ -1,5 +1,7 @@
 #
-hub,1,/tmp/kel1,/tmp/db1,216.164.48.37,3150,192.168.1.13,3150
-hub2,2,/tmp/kel2,/tmp/db2,192.168.1.13,3160
-hyper,3,kel1,/tmp/dbkel1,128.8.126.55,3150
-hyper2,4,kel2,/tmp/dbkel2,128.8.126.55,3160
+hub,1,/tmp/fsjosh1,/tmp/dbjosh1,216.164.48.37,3150,192.168.1.13,3150
+hub2,2,/tmp/fsjosh2,/tmp/dbjosh2,192.168.1.13,3160
+hyper,3,/tmp/fsjosh3,/tmp/dbjosh3,128.8.126.55,3150
+hyper2,4,/tmp/fsjosh4,/tmp/dbjosh3,128.8.126.55,3160
+bilbo,5,/tmp/fsjosh,/tmp/dbjosh,192.168.1.82,3100
+bilbo1,6,/tmp/fsjosh1,/tmp/dbjosh1,192.168.1.82,3200
