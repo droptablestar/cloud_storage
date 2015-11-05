@@ -4,4 +4,5 @@ hub2,2,/tmp/fsjosh2,/tmp/dbjosh2,192.168.1.13,3160
 hyper,3,/tmp/fsjosh3,/tmp/dbjosh3,128.8.126.55,3150
 hyper2,4,/tmp/fsjosh4,/tmp/dbjosh3,128.8.126.55,3160
 bilbo,5,/tmp/fsjosh,/tmp/dbjosh,192.168.1.82,3100
-bilbo1,6,/tmp/fsjosh1,/tmp/dbjosh1,192.168.1.82,3200
+bilbo1,6,/tmp/fsjosh1,/tmp/dbjosh1,192.168.1.82,3101
+bilbo2,7,/tmp/fsjosh2,/tmp/dbjosh2,192.168.1.82,3102

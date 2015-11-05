@@ -22,8 +22,6 @@ type Replica struct {
 	db    string
 	addr  string
 	port  int
-	// reqSock *zmq.Socket
-	live bool // true after we've received a flush from them
 }
 
 func (r *Replica) String() string {
@@ -64,14 +62,12 @@ func newServerConn(ip string, port int) *ServerConn {
 
 func (s ServerConn) Call(str string, args interface{}, reply interface{}) {
 	for {
-		p_out("conn: %p addr: %s\n", s.conn, s.addr)
 		for s.conn == nil {
 			s.conn, _ = rpc.Dial("tcp", s.addr)
 		}
 
 		if err := s.conn.Call(str, args, reply); err == nil {
 			return
-			n
 		}
 		s.conn = nil
 	}
@@ -136,21 +132,21 @@ func main() {
 
 	loadConfig(replicaString, "config.txt")
 
-	for {
-		for _, r := range replicas {
-			if r == merep {
-				p_out("server r: %q\n", r)
-				go func() {
-					serveInterface(r.addr, r.port, new(Arith))
-					for {
-						fmt.Printf(".")
-						time.Sleep(time.Second)
-					}
-				}()
-			} else {
-				p_out("client r: %q\n", r)
+	for _, r := range replicas {
+		if r == merep {
+			p_out("server r: %q\n", r)
+			go func() {
+				serveInterface(r.addr, r.port, new(Arith))
+				for {
+					fmt.Printf(".")
+					time.Sleep(time.Second)
+				}
+			}()
+			time.Sleep(time.Second)
+		} else {
+			p_out("client r: %q\n", r)
+			go func() {
 				serv := newServerConn(r.addr, r.port)
-				p_out("serv: %q\n", serv)
 				for i := 0; i < 100; i++ {
 					var reply int
 					args := &Args{7, i}
@@ -158,11 +154,13 @@ func main() {
 					serv.Call("Arith.Multiply", args, &reply)
 
 					time.Sleep(time.Second)
-					fmt.Printf("\nArith: %d*%d=%d\n", args.A, args.B, reply)
+					fmt.Printf("\nArith: %d*%d=%d from %s\n", args.A, args.B, reply, serv.addr)
 				}
-			}
-
+			}()
+			time.Sleep(time.Second)
 		}
+	}
+	for {
 	}
 }
 
