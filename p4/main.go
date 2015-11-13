@@ -112,7 +112,7 @@ func main() {
 		}
 
 		switch c {
-		case 'c':
+		case 'n':
 			newfs = "NEWFS "
 		case 'd':
 			debug = !debug
@@ -123,7 +123,7 @@ func main() {
 		case 'r':
 			replicaString = OptArg
 		default:
-			println("usage: main.go [-c | -d | -f <flush dur> | -m <mode> | -r <rep string>]", c)
+			println("usage: main.go [-n | -d | -f <flush dur> | -m <mode> | -r <rep string>]", c)
 			os.Exit(1)
 		}
 	}
