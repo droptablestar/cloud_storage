@@ -51,7 +51,7 @@ func main() {
 				dfs.ServeInterface(r.Addr, r.Port, new(dfs.Arith))
 				for {
 					fmt.Printf(".")
-					time.Sleep(time.Second)
+					time.Sleep(2 * time.Second)
 				}
 			}()
 			time.Sleep(time.Second)
@@ -77,5 +77,6 @@ func main() {
 		}
 	}
 	for {
+		time.Sleep(time.Second)
 	}
 }
