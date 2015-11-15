@@ -1,9 +1,5 @@
 package dfs
 
-/*
- Two main files are ../fuse.go and ../fs/serve.go
-*/
-
 import (
 	"encoding/json"
 	"log"
@@ -78,7 +74,6 @@ var sem chan int
 type FS struct{}
 
 //=============================================================================
-// Let one at a time in
 
 func getHead() (*DNode, uint64) {
 	if val, err := db.Get([]byte("head"), nil); err == nil {
@@ -105,12 +100,8 @@ func getHead() (*DNode, uint64) {
 	return nil, 0
 }
 
-func Init(dbg bool, cmp bool, mountPoint string, newfs bool, dbPath string, tm string) {
-	// Initialize a new diskv store, rooted at "my-data-dir", with a 1MB cache.
-
+func Init(dbg bool, mountPoint string, newfs bool, dbPath string, serv *serverConn) {
 	debug = dbg
-	tmStr = tm
-	compress = cmp
 	initStore(newfs, dbPath)
 
 	replicaID = uint64(rand.Int63())

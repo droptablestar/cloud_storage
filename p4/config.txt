@@ -7,5 +7,5 @@ bilbo,5,/tmp/fsjosh,/tmp/dbjosh,192.168.1.82,3100
 bilbo1,6,/tmp/fsjosh1,/tmp/dbjosh1,192.168.1.82,3101
 bilbo2,7,/tmp/fsjosh2,/tmp/dbjosh2,192.168.1.82,3102
 legolas,6,/tmp/fsjosh,/tmp/dbjosh,192.168.1.81,3100
-legolas1,6,/tmp/fsjosh1,/tmp/dbjosh1,192.168.1.81,3101
-legolas2,7,/tmp/fsjosh2,/tmp/dbjosh2,192.168.1.81,3102
+legolas1,7,/tmp/fsjosh1,/tmp/dbjosh1,192.168.1.81,3101
+legolas2,8,/tmp/fsjosh2,/tmp/dbjosh2,192.168.1.81,3102
