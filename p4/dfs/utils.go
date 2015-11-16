@@ -1,7 +1,7 @@
 package dfs
 
 import (
-	"bazil.org/fuse"
+	// "bazil.org/fuse"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
@@ -183,31 +183,25 @@ func (nd *Node) Receive(n *DNode, reply *Response) error {
 	n.sig = n.PrevSig
 	n.metaDirty = false
 
-	if n.IsRoot {
-		if err := server.InvalidateNodeData(root); err != nil &&
-			err != fuse.ErrNotCached {
-			p_out("invalidate error: %v", err)
-		} else {
-			p_out("invalidating: %q", root)
-		}
-		if err := server.InvalidateNodeData(n); err != nil &&
-			err != fuse.ErrNotCached {
-			p_out("invalidate error: %v", err)
-		} else {
-			p_out("invalidating: %q", n)
-		}
-		root = n
-		head.Root = root.PrevSig
-		putBlockSig("head", marshal(head))
+	if child, ok := nodeMap[n.Attrs.Inode]; ok { // in map
+		p_out("overwriting childSigs %q with n\n", child)
+		child.Name = n.Name
+		child.Attrs = n.Attrs
+		child.Version = n.Version
+		child.PrevSig = n.PrevSig
+		child.ChildSigs = n.ChildSigs
+		child.Owner = n.Owner
+		child.kids = make(map[string]*DNode)
+		p_out("new n = %q\n", child)
+	} else {
+		p_out("overwriting %q with n\n", nodeMap[n.Attrs.Inode])
+		nodeMap[n.Attrs.Inode] = n
+		p_out("new n = %q\n", nodeMap[n.Attrs.Inode])
 	}
+	// head.Root = root.PrevSig
 
 	reply.Ack = true
 	reply.Pid = Merep.Pid
-	// if err := server.InvalidateNodeData(root); err != nil && err != fuse.ErrNotCached {
-	// 	p_out("invalidate error: %v", err)
-	// } else {
-	// 	p_out("invalidating: %q", n)
-	// }
 	return nil
 }
 

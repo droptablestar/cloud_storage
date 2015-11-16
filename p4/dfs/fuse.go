@@ -18,11 +18,9 @@ import (
 
 //=============================================================================
 
-// ...   modified versions of your fuse call implementations from P1
-
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	in()
-	// p_out("Lookup for %q in \n%q\n", name, n)
+	p_out("Lookup for %q in \n%q\n", name, n)
 	if child, ok := n.kids[name]; ok { // in memory
 		// p_out("IN MEMORY\n\n")
 		out()
@@ -134,11 +132,8 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 			d.Attrs.Uid = req.Header.Uid
 			d.Attrs.Gid = req.Header.Gid
 			d.archive = true
-			p_out("PRE kids: %q\n", d.kids)
 			d.kids = getPrevs(getDNode(n.ChildSigs[split[0]]), d.kids)
-			p_out("d POST kids: %q\n\n", d.kids)
 			n.kids[req.Name] = d
-			p_out("n POST kids: %q\n\n", n.kids)
 			out()
 			return d, nil
 		}

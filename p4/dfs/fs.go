@@ -22,7 +22,6 @@ type DNode struct {
 	ChildSigs  map[string]string
 	DataBlocks []string
 	Owner      int
-	IsRoot     bool
 
 	sig       string
 	dirty     bool
@@ -35,8 +34,8 @@ type DNode struct {
 }
 
 func (d *DNode) String() string {
-	return fmt.Sprintf("Version: %d, Name: %s, ChildSigs: %q addr: %p",
-		d.Version, d.Name, d.ChildSigs, d)
+	return fmt.Sprintf("Version: %d, Name: %s, ChildSigs: %q Attrs: %q, addr: %p",
+		d.Version, d.Name, d.ChildSigs, d.Attrs, d)
 }
 
 // func (d *DNode) String() string {
@@ -84,6 +83,8 @@ var replicaID uint64
 var inPast bool
 var sem chan int
 
+var nodeMap map[uint64]*DNode
+
 var server *fs.Server
 
 type FS struct{}
@@ -118,6 +119,7 @@ func getHead() (*DNode, uint64) {
 func Init(mountPoint string, newfs bool, dbPath string) {
 	initStore(newfs, dbPath)
 
+	nodeMap = make(map[uint64]*DNode)
 	replicaID = uint64(rand.Int63())
 
 	if n, ni := getHead(); n != nil {
@@ -125,11 +127,12 @@ func Init(mountPoint string, newfs bool, dbPath string) {
 		root.sig = head.Root
 		nextInd = ni
 		version = n.Version + 1
+		nodeMap[root.Attrs.Inode] = root
 	} else {
 		p_out("GETHEAD fail\n")
 		root = new(DNode)
 		root.init("", os.ModeDir|0755)
-		root.IsRoot = true
+		nodeMap[root.Attrs.Inode] = root
 
 		head = new(Head)
 		head.Root = root.sig
