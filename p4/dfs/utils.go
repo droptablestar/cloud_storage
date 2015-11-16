@@ -1,7 +1,6 @@
 package dfs
 
 import (
-	// "bazil.org/fuse"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"

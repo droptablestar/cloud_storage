@@ -194,8 +194,6 @@ func out() {
 	<-sem
 }
 
-// ...
-
 func Flusher(sem chan int) {
 	for {
 		time.Sleep(5 * time.Second)
