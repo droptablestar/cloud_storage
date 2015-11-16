@@ -202,7 +202,7 @@ func Flusher(sem chan int) {
 		in()
 		// p_out("\n\tFLUSHER\n\n")
 		if root.metaDirty {
-			// p_out("FLUSHING\n")
+			// p_out("FLUSHING root: %q\n", root)
 			root.Attrs.Atime = time.Now()
 			flush(root)
 			version++
