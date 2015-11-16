@@ -2,6 +2,7 @@ package dfs
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -20,6 +21,8 @@ type DNode struct {
 	PrevSig    string
 	ChildSigs  map[string]string
 	DataBlocks []string
+	Owner      int
+	IsRoot     bool
 
 	sig       string
 	dirty     bool
@@ -31,11 +34,22 @@ type DNode struct {
 	data      []byte
 }
 
+func (d *DNode) String() string {
+	return fmt.Sprintf("Version: %d, Name: %s, ChildSigs: %q addr: %p",
+		d.Version, d.Name, d.ChildSigs, d)
+}
+
+// func (d *DNode) String() string {
+// 	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, DataBlocks: %#v, sig: [%s], Parent: [%v], meta: %t, kids: %#v, archive: %t\n",
+// 		d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.DataBlocks, d.sig, d.parent, d.metaDirty, d.kids, d.archive)
+// }
+
 func (d *DNode) init(name string, mode os.FileMode) {
 	startTime := time.Now()
 	d.Name = name
 	d.Version = version
 	d.ChildSigs = make(map[string]string)
+	d.Owner = Merep.Pid
 	d.Attrs = fuse.Attr{
 		Valid:  1 * time.Minute,
 		Inode:  nextInd,
@@ -58,7 +72,6 @@ type Head struct {
 	Replica uint64
 }
 
-var debug = false
 var tmStr = ""
 var compress = false
 var uid = uint32(os.Geteuid())
@@ -70,6 +83,8 @@ var version uint64 = 1
 var replicaID uint64
 var inPast bool
 var sem chan int
+
+var server *fs.Server
 
 type FS struct{}
 
@@ -100,8 +115,7 @@ func getHead() (*DNode, uint64) {
 	return nil, 0
 }
 
-func Init(dbg bool, mountPoint string, newfs bool, dbPath string, serv *serverConn) {
-	debug = dbg
+func Init(mountPoint string, newfs bool, dbPath string) {
 	initStore(newfs, dbPath)
 
 	replicaID = uint64(rand.Int63())
@@ -115,6 +129,7 @@ func Init(dbg bool, mountPoint string, newfs bool, dbPath string, serv *serverCo
 		p_out("GETHEAD fail\n")
 		root = new(DNode)
 		root.init("", os.ModeDir|0755)
+		root.IsRoot = true
 
 		head = new(Head)
 		head.Root = root.sig
@@ -122,8 +137,6 @@ func Init(dbg bool, mountPoint string, newfs bool, dbPath string, serv *serverCo
 	}
 	p_out("root %q", root)
 	p_out("root inode %v", root.Attrs.Inode)
-
-	p_out("compress: %t\n", compress)
 
 	if err := os.MkdirAll(mountPoint, 0755); err != nil {
 		p_err("mount pt creation fail\n")
@@ -133,6 +146,10 @@ func Init(dbg bool, mountPoint string, newfs bool, dbPath string, serv *serverCo
 	c, err := fuse.Mount(mountPoint)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if p := c.Protocol(); !p.HasInvalidate() {
+		p_die("kernel FUSE support is too old to have invalidations: version %v", p)
 	}
 
 	ch := make(chan os.Signal, 1)
@@ -148,7 +165,13 @@ func Init(dbg bool, mountPoint string, newfs bool, dbPath string, serv *serverCo
 	sem = make(chan int, 1)
 	go Flusher(sem)
 
-	err = fs.Serve(c, FS{})
+	for _, c := range Clients {
+		p_out("client: %s\n", c)
+	}
+
+	server = fs.New(c, nil)
+	err = server.Serve(FS{})
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -178,7 +201,6 @@ func Flusher(sem chan int) {
 		if root.metaDirty {
 			// p_out("FLUSHING\n")
 			root.Attrs.Atime = time.Now()
-			// root.PrevSig = root.sig
 			flush(root)
 			version++
 

@@ -20,13 +20,6 @@ import (
 
 // ...   modified versions of your fuse call implementations from P1
 
-func (d *DNode) String() string {
-	// return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, DataBlocks: %#v, sig: [%q], parent: %q, meta: %t, kids: %#v, data: [%s]\n",
-	// 	d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.DataBlocks, d.sig, d.parent, d.metaDirty, d.kids, d.data)
-	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, DataBlocks: %#v, sig: [%s], Parent: [%v], meta: %t, kids: %#v, archive: %t\n",
-		d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.DataBlocks, d.sig, d.parent, d.metaDirty, d.kids, d.archive)
-}
-
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	in()
 	// p_out("Lookup for %q in \n%q\n", name, n)
@@ -206,11 +199,9 @@ func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	p_out("Readdirall for %q\n\n", n)
 	var dirDirs = []fuse.Dirent{}
 	for _, val := range n.kids {
-		p_out("ADDING: %q\n", val)
 		dirDirs = append(dirDirs, addDirEnt(val))
 	}
 	for key, val := range n.ChildSigs {
-		p_out("CHILD: %q\n", key)
 		if _, ok := n.kids[key]; !ok {
 			cn := getDNode(val)
 			dirDirs = append(dirDirs, addDirEnt(cn))
@@ -376,47 +367,3 @@ func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.N
 	out()
 	return fuse.ENOENT
 }
-
-func (n *DNode) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
-	in()
-	p_out("Symlink: \nreq: %q \nn: %q\n\n", req, n)
-	link := *new(DNode)
-	link.Attrs = *new(fuse.Attr)
-	// for some reason redis was trying to link to a file that didn't exist
-	if _, ok := n.kids[req.Target]; ok {
-		link.Attrs.Mode = os.ModeSymlink | 0755
-		n.Attrs.Nlink += 1
-		n.kids[req.NewName] = &link
-
-		out()
-		return &link, nil
-	}
-	out()
-	return nil, fuse.ENOENT
-}
-
-func (n *DNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
-	in()
-	p_out("Readlink: \nreq: %q \nn: %q\n\n", req, n)
-	out()
-	return n.Name, nil
-}
-
-func (n *DNode) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
-	in()
-	p_out("Link: \nreq: %q \nn: %q \nold: %q\n", req, n, old)
-	if oldDir, ok := old.(*DNode); ok {
-		n.kids[req.NewName] = oldDir
-		return oldDir, nil
-	}
-	out()
-	return nil, fuse.ENOENT
-}
-
-//=============================================================================
-
-// var Usage = func() {
-// 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-// 	fmt.Fprintf(os.Stderr, "  %s MOUNTPOINT\n", os.Args[0])
-// 	flag.PrintDefaults()
-// }

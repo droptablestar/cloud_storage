@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-var nextSeqNum = 1
-
 var newfs string
 var flusherPeriod = 5
 var modeConsistency = "none"
@@ -20,7 +18,7 @@ func main() {
 	var c int
 
 	for {
-		if c = Getopt("cdf:m:r:"); c == EOF {
+		if c = Getopt("ndf:m:r:"); c == EOF {
 			break
 		}
 
@@ -45,37 +43,18 @@ func main() {
 
 	dfs.LoadConfig(replicaString, "config.txt")
 	for _, r := range dfs.Replicas {
-		if r == dfs.Merep {
-			fmt.Printf("server r: %q\n", r)
-			go func() {
-				dfs.ServeInterface(r.Addr, r.Port, new(dfs.Arith))
-				for {
-					fmt.Printf(".")
-					time.Sleep(2 * time.Second)
-				}
-			}()
-			time.Sleep(time.Second)
-		} else {
+		if r != dfs.Merep {
 			fmt.Printf("client r: %q\n", r)
-			go func() {
-				serv := dfs.NewServerConn(r.Addr, r.Port)
-				// fmt.Printf("\nStartup up with debug %v, mountpt: %q, %sstorePath %q, at%s:%d\n\n",
-				// 	dfs.Debug, r.mount, newfs, r.db, r.addr, r.port)
-
-				// dfs.Init(dfs.Debug, r.Mount, newfs != "", r.Db, serv)
-				for i := 0; i < 100; i++ {
-					var reply int
-					args := &dfs.Args{7, i}
-
-					serv.Call("Arith.Multiply", args, &reply)
-
-					time.Sleep(time.Second)
-					fmt.Printf("\nArith: %d*%d=%d from %s\n", args.A, args.B, reply, serv.Addr)
-				}
-			}()
-			time.Sleep(time.Second)
+			dfs.Clients = append(dfs.Clients, dfs.NewServerConn(r.Addr, r.Port))
 		}
 	}
+	go func() {
+		dfs.ServeInterface(dfs.Merep.Addr, dfs.Merep.Port, new(dfs.Node))
+		fmt.Printf("\nDebug %v, mountpt: %q, %sstorePath %q, at%s:%d\n\n",
+			dfs.Debug, dfs.Merep.Mount, newfs, dfs.Merep.Db,
+			dfs.Merep.Addr, dfs.Merep.Port)
+		dfs.Init(dfs.Merep.Mount, newfs != "", dfs.Merep.Db)
+	}()
 	for {
 		time.Sleep(time.Second)
 	}

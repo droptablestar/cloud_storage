@@ -1,19 +1,14 @@
 package dfs
 
 import (
+	"bazil.org/fuse"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/syndtr/goleveldb/leveldb"
-	"io/ioutil"
 	"log"
-	"net"
-	"net/rpc"
 	"os"
-	"regexp"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -40,7 +35,7 @@ func initStore(newfs bool, dbPath string) {
 	db, err = leveldb.OpenFile(dbPath, nil)
 
 	if err != nil {
-		panic("no open db\n")
+		p_die("no open db: %s\n", err)
 	}
 }
 
@@ -168,11 +163,52 @@ func flush(n *DNode) string {
 		n.Attrs.Atime = time.Now()
 		n.Attrs.Mtime = time.Now()
 		n.Version = version
-		n.PrevSig = putBlock(marshal(n))
+		tmp := putBlock(marshal(n))
+		for _, c := range Clients {
+			var reply Response
+			p_out("sending %s to %s:%d\n", n, c.Addr, c.port)
+			c.Call("Node.Receive", n, &reply)
+			p_out("Response from %s:%d -- %q\n", c.Addr, c.port, &reply)
+		}
+		n.PrevSig = tmp
 		n.sig = n.PrevSig
 		n.metaDirty = false
 	}
 	return n.sig
+}
+
+func (nd *Node) Receive(n *DNode, reply *Response) error {
+	p_out("received %q from %d\n", n, n.Owner)
+	n.PrevSig = putBlock(marshal(n))
+	n.sig = n.PrevSig
+	n.metaDirty = false
+
+	if n.IsRoot {
+		if err := server.InvalidateNodeData(root); err != nil &&
+			err != fuse.ErrNotCached {
+			p_out("invalidate error: %v", err)
+		} else {
+			p_out("invalidating: %q", root)
+		}
+		if err := server.InvalidateNodeData(n); err != nil &&
+			err != fuse.ErrNotCached {
+			p_out("invalidate error: %v", err)
+		} else {
+			p_out("invalidating: %q", n)
+		}
+		root = n
+		head.Root = root.PrevSig
+		putBlockSig("head", marshal(head))
+	}
+
+	reply.Ack = true
+	reply.Pid = Merep.Pid
+	// if err := server.InvalidateNodeData(root); err != nil && err != fuse.ErrNotCached {
+	// 	p_out("invalidate error: %v", err)
+	// } else {
+	// 	p_out("invalidating: %q", n)
+	// }
+	return nil
 }
 
 func peteTime(s string) (time.Time, bool) {
@@ -209,168 +245,6 @@ func (top *DNode) timeTravel(tm time.Time) *DNode {
 		top = preTop
 	}
 	return top
-}
-
-type Replica struct {
-	Name  string
-	Pid   int
-	Mount string
-	Db    string
-	Addr  string
-	Port  int
-}
-
-func (r *Replica) String() string {
-	return fmt.Sprintf("name: [%s] pid: [%d] mount: [%s] db: [%s] addr: [%s] port: [%d]\n",
-		r.Name, r.Pid, r.Mount, r.Db, r.Addr, r.Port)
-}
-
-type serverConn struct {
-	conn *rpc.Client
-	port int
-	Addr string
-}
-
-func (s *serverConn) String() string {
-	return fmt.Sprintf("port: [%d] addr: [%s]\n", s.port, s.Addr)
-}
-
-//=====================================================================
-// This is for the client.
-//=====================================================================
-func NewServerConn(ip string, port int) *serverConn {
-	return &serverConn{port: port, Addr: ip + fmt.Sprintf(":%d", port)}
-}
-
-func (s serverConn) Call(str string, args interface{}, reply interface{}) {
-	for {
-		for s.conn == nil {
-			s.conn, _ = rpc.Dial("tcp", s.Addr)
-		}
-
-		if err := s.conn.Call(str, args, reply); err == nil {
-			return
-		}
-		s.conn = nil
-	}
-}
-
-//=====================================================================
-// This is for the server.
-//=====================================================================
-func ServeInterface(ip string, port int, arg interface{}) {
-	rpc.Register(arg)
-	l, e := net.Listen("tcp", ip+fmt.Sprintf(":%d", port))
-	if e != nil {
-		log.Fatal("listen error:", e)
-	}
-	go func() {
-		for {
-			conn, _ := l.Accept()
-			go rpc.ServeConn(conn)
-		}
-	}()
-}
-
-//=====================================================================
-
-type Args struct {
-	A, B int
-}
-
-type Arith int
-
-func (t *Arith) Multiply(args *Args, reply *int) error {
-	*reply = args.A * args.B
-	return nil
-}
-
-// From a NAT, host 'hub' has both a local address (192.168.1.13), and
-// an internet-visible address. Use the one appropriate for the local
-// machine.
-func sameNet(s1, s2 string) bool {
-	re := regexp.MustCompile(`\d+\.\d+`)
-	p1 := re.FindString(s1)
-	p2 := re.FindString(s2)
-	return p1 == p2
-}
-
-var hostname string
-var hostip string
-
-var Replicas map[int]*Replica
-var Merep *Replica
-var pid int
-
-var Debug = false
-
-func LoadConfig(rstr, fname string) {
-	rnames := strings.Split(rstr, ",")
-	myname, rnames := rnames[0], rnames[1:]
-
-	hostname, _ = os.Hostname()
-	addrs, _ := net.LookupHost(hostname)
-
-	hostip = addrs[0]
-	p_out("loading %q, hostname %q, hostip %q\n", fname, hostname, hostip)
-
-	ldata, lerr := ioutil.ReadFile(fname)
-	p_dieif(lerr != nil, "NO read config: %v\n", lerr)
-
-	// for matching below
-	hostname = strings.Replace(hostname, ".local", "", 1)
-
-	// init our Replicas map
-	Replicas = make(map[int]*Replica)
-
-	p_out("read %d\n", len(ldata))
-	for _, ln := range strings.Split(string(ldata), "\n") {
-		if (len(ln) < 5) || (ln[0] == '#') {
-			continue
-		}
-
-		var lname, lpid, lmount, ldb, laddr, lport, laddr2, lport2 string
-
-		flds := strings.Split(ln, ",")
-		if !contains(rnames, flds[0]) && flds[0] != myname {
-			continue
-		}
-		switch len(flds) {
-		case 6:
-			lname, lpid, lmount, ldb, laddr, lport = flds[0], flds[1], flds[2], flds[3], flds[4], flds[5]
-		case 8:
-			lname, lpid, lmount, ldb, laddr, lport = flds[0], flds[1], flds[2], flds[3], flds[4], flds[5]
-			laddr2, lport2 = flds[6], flds[7]
-		default:
-			p_die("bad line in config file %q\n", ln)
-		}
-		if (laddr2 != "") && (sameNet(laddr2, hostip)) {
-			laddr = laddr2
-			lport = lport2
-		}
-		rep := &Replica{
-			Name:  lname,
-			Mount: lmount,
-			Db:    ldb,
-			Addr:  laddr,
-		}
-		rep.Pid, _ = strconv.Atoi(lpid)
-		rep.Port, _ = strconv.Atoi(lport)
-
-		p_out("myname [%s] Merep [%s] hostname [%s]\n", myname, Merep, hostname)
-		if (myname == rep.Name) || ((myname == "auto") && (Merep == nil) && (hostname == rep.Name)) {
-			Merep = rep
-			pid = rep.Pid
-			p_err("I'm %q, pid %d\n", rep.Name, pid)
-		}
-
-		Replicas[rep.Pid] = rep
-	}
-	p_dieif(Merep == nil, "Cannot find my name (%q/%q) in config (%q)!\n", myname, hostip, fname)
-	p_err("Replicas:\n")
-	for _, r := range Replicas {
-		p_err("\t%2d) %10s, %15s/%2d\n", r.Pid, r.Name, r.Addr, r.Port)
-	}
 }
 
 func p_out(s string, args ...interface{}) {
