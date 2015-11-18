@@ -171,6 +171,7 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 	d.parent = n
 	n.kids[req.Name] = d
 
+	nodeMap[d.Attrs.Inode] = d
 	markDirty(d)
 
 	out()
@@ -236,6 +237,8 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 	f.parent = n
 
 	n.kids[req.Name] = f
+
+	nodeMap[n.Attrs.Inode] = n
 
 	markDirty(f)
 
@@ -320,10 +323,8 @@ func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error)
 	}
 	err = fuse.ENOENT
 	// If the DNode exists...delete it.
-	if val, ok := n.kids[req.Name]; ok {
-		if val.Attrs.Mode&os.ModeType == os.ModeSymlink {
-			n.Attrs.Nlink -= 1
-		}
+	if child, ok := n.kids[req.Name]; ok {
+		nodeMap[child.Attrs.Inode] = nil
 		delete(n.kids, req.Name)
 		err = nil
 	}
@@ -348,11 +349,17 @@ func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.N
 	if outDir, ok := newDir.(*DNode); ok {
 		p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, outDir)
 
-		n.kids[req.OldName].Name = req.NewName
-		outDir.kids[req.NewName] = n.kids[req.OldName]
+		if child, ok := n.kids[req.OldName]; ok {
+			child.Name = req.NewName
+			outDir.kids[req.NewName] = child
+			delete(n.kids, req.OldName)
+		} else {
+			outDir.ChildSigs[req.NewName] = n.ChildSigs[req.OldName]
+			outDir.kids[req.NewName] = getDNode(n.ChildSigs[req.OldName])
+		}
 
-		delete(n.kids, req.OldName)
 		delete(n.ChildSigs, req.OldName)
+
 		markDirty(n)
 		markDirty(outDir.kids[req.NewName])
 

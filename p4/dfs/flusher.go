@@ -13,18 +13,16 @@ func flush(n *DNode) string {
 		}
 	}
 	if n.metaDirty {
-		p_out("flushing: %q\n", n)
+		// p_out("flushing: %q\n", n)
 		n.Attrs.Atime = time.Now()
 		n.Attrs.Mtime = time.Now()
 		n.Version = version
 		tmp := putBlock(marshal(n))
-		if n.Owner == Merep.Pid {
-			for _, c := range Clients {
-				var reply Response
-				p_out("sending %s to %s:%d\n", n, c.Addr, c.port)
-				c.Call("Node.Receive", *n, &reply)
-				p_out("Response from %s:%d -- %q\n", c.Addr, c.port, &reply)
-			}
+		for _, c := range Clients {
+			var reply Response
+			p_out("sending %s to %s:%d\n", n, c.Addr, c.port)
+			c.Call("Node.Receive", *n, &reply)
+			p_out("Response from %s:%d -- %q\n", c.Addr, c.port, &reply)
 		}
 		n.PrevSig = tmp
 		n.sig = n.PrevSig

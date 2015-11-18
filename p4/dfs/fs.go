@@ -34,8 +34,8 @@ type DNode struct {
 }
 
 func (d *DNode) String() string {
-	return fmt.Sprintf("Version: %d, Name: %s, ChildSigs: %q Attrs: %q, addr: %p",
-		d.Version, d.Name, d.ChildSigs, d.Attrs, d)
+	return fmt.Sprintf("Version: %d, Name: %s, ChildSigs: %q Attrs: %q, kids: %q",
+		d.Version, d.Name, d.ChildSigs, d.Attrs, d.kids)
 }
 
 // func (d *DNode) String() string {

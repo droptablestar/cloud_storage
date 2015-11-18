@@ -99,6 +99,7 @@ func (nd *Node) Receive(n DNode, reply *Response) error {
 	p_out("received %q from %d\n", &n, n.Owner)
 	n.PrevSig = putBlock(marshal(n))
 	n.sig = n.PrevSig
+	n.metaDirty = false
 
 	if n.Attrs.Inode > nextInd {
 		nextInd = n.Attrs.Inode
@@ -109,13 +110,13 @@ func (nd *Node) Receive(n DNode, reply *Response) error {
 	if child, ok := nodeMap[n.Attrs.Inode]; ok { // in map
 		p_out("overwriting child data %q\n", child)
 		*child = n
-		child.kids = make(map[string]*DNode)
-		p_out("new n = %q\n", child)
+		nodeMap[n.Attrs.Inode].ChildSigs = n.ChildSigs
 	} else {
 		p_out("overwriting %q\n", nodeMap[n.Attrs.Inode])
 		nodeMap[n.Attrs.Inode] = &n
-		p_out("new n = %q\n", nodeMap[n.Attrs.Inode])
 	}
+	nodeMap[n.Attrs.Inode].kids = make(map[string]*DNode)
+	p_out("new n = %q\n", nodeMap[n.Attrs.Inode])
 	if n.Attrs.Inode == root.Attrs.Inode {
 		head.Root = n.PrevSig
 		head.NextInd = nextInd
