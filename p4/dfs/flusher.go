@@ -22,7 +22,7 @@ func flush(n *DNode) string {
 			for _, c := range Clients {
 				var reply Response
 				p_out("sending %s to %s:%d\n", n, c.Addr, c.port)
-				c.Call("Node.Receive", n, &reply)
+				c.Call("Node.Receive", *n, &reply)
 				p_out("Response from %s:%d -- %q\n", c.Addr, c.port, &reply)
 			}
 		}

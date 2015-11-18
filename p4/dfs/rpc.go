@@ -57,13 +57,23 @@ func (n *Node) string() string {
 }
 
 type Response struct {
-	Ack bool
-	Pid int
+	Ack   bool
+	Pid   int
+	Block DNode
 }
 
 func (r *Response) String() string {
 	return fmt.Sprintf("Ack: [%t] Pid: %d\n", r.Ack, r.Pid)
 }
+
+// type Requent struct {
+// 	Sig string
+// 	Pid int
+// }
+
+// func (r *Request) String() string {
+// 	return fmt.Sprintf("Ack: [%t] Pid: %d\n", r.Ack, r.Pid)
+// }
 
 //=====================================================================
 // This is for the client.
@@ -85,8 +95,8 @@ func (s serverConn) Call(str string, args interface{}, reply interface{}) {
 	}
 }
 
-func (nd *Node) Receive(n *DNode, reply *Response) error {
-	p_out("received %q from %d\n", n, n.Owner)
+func (nd *Node) Receive(n DNode, reply *Response) error {
+	p_out("received %q from %d\n", &n, n.Owner)
 	n.PrevSig = putBlock(marshal(n))
 	n.sig = n.PrevSig
 
@@ -97,19 +107,13 @@ func (nd *Node) Receive(n *DNode, reply *Response) error {
 	}
 
 	if child, ok := nodeMap[n.Attrs.Inode]; ok { // in map
-		p_out("overwriting childSigs %q with n\n", child)
-		child.Name = n.Name
-		child.Attrs = n.Attrs
-		child.Version = n.Version
-		child.PrevSig = n.PrevSig
-		child.ChildSigs = n.ChildSigs
-		child.DataBlocks = n.DataBlocks
-		child.Owner = n.Owner
+		p_out("overwriting child data %q\n", child)
+		*child = n
 		child.kids = make(map[string]*DNode)
 		p_out("new n = %q\n", child)
 	} else {
-		p_out("overwriting %q with n\n", nodeMap[n.Attrs.Inode])
-		nodeMap[n.Attrs.Inode] = n
+		p_out("overwriting %q\n", nodeMap[n.Attrs.Inode])
+		nodeMap[n.Attrs.Inode] = &n
 		p_out("new n = %q\n", nodeMap[n.Attrs.Inode])
 	}
 	if n.Attrs.Inode == root.Attrs.Inode {
