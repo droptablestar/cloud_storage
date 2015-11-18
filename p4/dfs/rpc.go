@@ -85,6 +85,44 @@ func (s serverConn) Call(str string, args interface{}, reply interface{}) {
 	}
 }
 
+func (nd *Node) Receive(n *DNode, reply *Response) error {
+	p_out("received %q from %d\n", n, n.Owner)
+	n.PrevSig = putBlock(marshal(n))
+	n.sig = n.PrevSig
+
+	if n.Attrs.Inode > nextInd {
+		nextInd = n.Attrs.Inode
+	} else if n.Attrs.Inode == nextInd {
+		nextInd++
+	}
+
+	if child, ok := nodeMap[n.Attrs.Inode]; ok { // in map
+		p_out("overwriting childSigs %q with n\n", child)
+		child.Name = n.Name
+		child.Attrs = n.Attrs
+		child.Version = n.Version
+		child.PrevSig = n.PrevSig
+		child.ChildSigs = n.ChildSigs
+		child.DataBlocks = n.DataBlocks
+		child.Owner = n.Owner
+		child.kids = make(map[string]*DNode)
+		p_out("new n = %q\n", child)
+	} else {
+		p_out("overwriting %q with n\n", nodeMap[n.Attrs.Inode])
+		nodeMap[n.Attrs.Inode] = n
+		p_out("new n = %q\n", nodeMap[n.Attrs.Inode])
+	}
+	if n.Attrs.Inode == root.Attrs.Inode {
+		head.Root = n.PrevSig
+		head.NextInd = nextInd
+		putBlockSig("head", marshal(head))
+	}
+
+	reply.Ack = true
+	reply.Pid = Merep.Pid
+	return nil
+}
+
 //=====================================================================
 // This is for the server.
 //=====================================================================

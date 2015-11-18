@@ -72,7 +72,6 @@ type Head struct {
 }
 
 var tmStr = ""
-var compress = false
 var uid = uint32(os.Geteuid())
 var gid = uint32(os.Getegid())
 var root *DNode
@@ -192,26 +191,6 @@ func in() {
 
 func out() {
 	<-sem
-}
-
-func Flusher(sem chan int) {
-	for {
-		time.Sleep(5 * time.Second)
-		in()
-		// p_out("\n\tFLUSHER\n\n")
-		if root.metaDirty {
-			// p_out("FLUSHING root: %q\n", root)
-			root.Attrs.Atime = time.Now()
-			flush(root)
-			version++
-
-			head.Root = root.PrevSig
-			head.NextInd = nextInd
-			putBlockSig("head", marshal(head))
-		}
-
-		out()
-	}
 }
 
 //=============================================================================
