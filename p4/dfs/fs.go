@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"time"
 
@@ -28,20 +27,13 @@ type DNode struct {
 	metaDirty bool
 	expanded  bool
 	parent    *DNode
-	archive   bool
 	kids      map[string]*DNode
 	data      []byte
 }
 
 func (d *DNode) String() string {
-	return fmt.Sprintf("Version: %d, Name: %s, ChildSigs: %q Attrs: %q, kids: %q",
-		d.Version, d.Name, d.ChildSigs, d.Attrs, d.kids)
+	return fmt.Sprintf("Version: %d, Name: %s", d.Version, d.Name)
 }
-
-// func (d *DNode) String() string {
-// 	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, DataBlocks: %#v, sig: [%s], Parent: [%v], meta: %t, kids: %#v, archive: %t\n",
-// 		d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.DataBlocks, d.sig, d.parent, d.metaDirty, d.kids, d.archive)
-// }
 
 func (d *DNode) init(name string, mode os.FileMode) {
 	startTime := time.Now()
@@ -71,15 +63,12 @@ type Head struct {
 	Replica uint64
 }
 
-var tmStr = ""
 var uid = uint32(os.Geteuid())
 var gid = uint32(os.Getegid())
 var root *DNode
 var head *Head
 var nextInd uint64 = 1
 var version uint64 = 1
-var replicaID uint64
-var inPast bool
 var sem chan int
 
 var nodeMap map[uint64]*DNode
@@ -94,23 +83,7 @@ func getHead() (*DNode, uint64) {
 	if val, err := db.Get([]byte("head"), nil); err == nil {
 		p_out("FOUND HEAD!")
 		json.Unmarshal(val, &head)
-		if tmStr == "" {
-			return getDNode(head.Root), head.NextInd
-		}
-		loc, _ := time.LoadLocation("Local")
-		tmTime, err := time.ParseInLocation("2006-01-02T15:04:05", tmStr, loc)
-		if err != nil {
-			panic(err)
-		}
-		p_out("%q\n", tmTime)
-
-		root = getDNode(head.Root)
-		if tmTime.After(root.Attrs.Atime) {
-			return root, head.NextInd
-		}
-		root = root.timeTravel(tmTime)
-		inPast = true
-		return root, 0
+		return getDNode(head.Root), head.NextInd
 	}
 	return nil, 0
 }
@@ -119,7 +92,6 @@ func Init(mountPoint string, newfs bool, dbPath string) {
 	initStore(newfs, dbPath)
 
 	nodeMap = make(map[uint64]*DNode)
-	replicaID = uint64(rand.Int63())
 
 	if n, ni := getHead(); n != nil {
 		root = n
@@ -148,10 +120,6 @@ func Init(mountPoint string, newfs bool, dbPath string) {
 	c, err := fuse.Mount(mountPoint)
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if p := c.Protocol(); !p.HasInvalidate() {
-		p_die("kernel FUSE support is too old to have invalidations: version %v", p)
 	}
 
 	ch := make(chan os.Signal, 1)

@@ -1,4 +1,3 @@
-//
 package dfs
 
 import (
@@ -11,7 +10,6 @@ import (
 	"os"
 )
 
-//var d *diskv.Diskv
 var db *leveldb.DB
 
 const (

@@ -137,12 +137,3 @@ func markDirty(n *DNode) {
 	}
 	n.metaDirty = true
 }
-
-func inArchive(n *DNode) bool {
-	for ; n != nil; n = n.parent {
-		if n.archive {
-			return true
-		}
-	}
-	return false
-}

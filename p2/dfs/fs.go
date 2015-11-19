@@ -1,11 +1,8 @@
 package dfs
 
-/*
- Two main files are ../fuse.go and ../fs/serve.go
-*/
-
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -18,14 +15,11 @@ import (
 )
 
 type DNode struct {
-	Name  string
-	Attrs fuse.Attr
-	// ParentSig string  // not needed?
-	Version uint64
-	PrevSig string
-
-	ChildSigs map[string]string
-
+	Name       string
+	Attrs      fuse.Attr
+	Version    uint64
+	PrevSig    string
+	ChildSigs  map[string]string
 	DataBlocks []string
 
 	sig       string
@@ -35,6 +29,10 @@ type DNode struct {
 	parent    *DNode
 	kids      map[string]*DNode
 	data      []byte
+}
+
+func (d *DNode) String() string {
+	return fmt.Sprintf("Version: %d, Name: %s", d.Version, d.Name)
 }
 
 func (d *DNode) init(name string, mode os.FileMode) {

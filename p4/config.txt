@@ -1,9 +1,9 @@
 #
 hub,1,/tmp/fsjosh,/tmp/dbjosh,216.164.48.37,3150,192.168.1.13,3150
 hub1,2,/tmp/fsjosh1,/tmp/dbjosh1,192.168.1.13,3160
-hyper,3,/tmp/fsjosh,/tmp/dbjosh,128.8.126.55,3100
-hyper1,4,/tmp/fsjosh1,/tmp/dbjosh1,128.8.126.55,3101
-hyper2,5,/tmp/fsjosh2,/tmp/dbjosh2,128.8.126.55,3102
+hyper,3,fsjosh,dbjosh,128.8.126.55,3100
+hyper1,4,fsjosh1,dbjosh1,128.8.126.55,3101
+hyper2,5,fsjosh2,dbjosh2,128.8.126.55,3102
 bilbo,6,/tmp/fsjosh,/tmp/dbjosh,192.168.1.82,3100
 bilbo1,7,/tmp/fsjosh1,/tmp/dbjosh1,192.168.1.82,3101
 bilbo2,8,/tmp/fsjosh2,/tmp/dbjosh2,192.168.1.82,3102

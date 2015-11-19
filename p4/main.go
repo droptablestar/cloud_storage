@@ -45,7 +45,7 @@ func main() {
 	for _, r := range dfs.Replicas {
 		if r != dfs.Merep {
 			fmt.Printf("client r: %q\n", r)
-			dfs.Clients = append(dfs.Clients, dfs.NewServerConn(r.Addr, r.Port))
+			dfs.Clients[r.Pid] = dfs.NewServerConn(r.Addr, r.Port)
 		}
 	}
 	go func() {

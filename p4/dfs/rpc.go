@@ -22,7 +22,7 @@ var pid int
 
 var Replicas map[int]*Replica
 var Merep *Replica
-var Clients []*serverConn
+var Clients map[int]*serverConn
 
 var Debug = false
 
@@ -59,40 +59,36 @@ func (n *Node) string() string {
 type Response struct {
 	Ack   bool
 	Pid   int
-	Block DNode
+	Block []byte
 }
 
 func (r *Response) String() string {
 	return fmt.Sprintf("Ack: [%t] Pid: %d\n", r.Ack, r.Pid)
 }
 
-// type Requent struct {
-// 	Sig string
-// 	Pid int
-// }
+type Request struct {
+	Sig string
+	Pid int
+}
 
-// func (r *Request) String() string {
-// 	return fmt.Sprintf("Ack: [%t] Pid: %d\n", r.Ack, r.Pid)
-// }
+func (r *Request) String() string {
+	return fmt.Sprintf("Sig: [%s] Pid: %d\n", r.Sig, r.Pid)
+}
 
 //=====================================================================
 // This is for the client.
 //=====================================================================
-func NewServerConn(ip string, port int) *serverConn {
-	return &serverConn{port: port, Addr: ip + fmt.Sprintf(":%d", port)}
-}
-
-func (s serverConn) Call(str string, args interface{}, reply interface{}) {
-	for {
-		for s.conn == nil {
-			s.conn, _ = rpc.Dial("tcp", s.Addr)
-		}
-
-		if err := s.conn.Call(str, args, reply); err == nil {
-			return
-		}
-		s.conn = nil
+func (nd *Node) Req(r *Request, reply *Response) error {
+	reply.Pid = Merep.Pid
+	if b := getBlock(r.Sig); b != nil {
+		reply.Ack = true
+		reply.Block = b
+		p_out("Sending block %s to %d\n", r.Sig, r.Pid)
+	} else {
+		reply.Ack = false
+		reply.Block = nil
 	}
+	return nil
 }
 
 func (nd *Node) Receive(n DNode, reply *Response) error {
@@ -128,6 +124,23 @@ func (nd *Node) Receive(n DNode, reply *Response) error {
 	return nil
 }
 
+func NewServerConn(ip string, port int) *serverConn {
+	return &serverConn{port: port, Addr: ip + fmt.Sprintf(":%d", port)}
+}
+
+func (s serverConn) Call(str string, args interface{}, reply interface{}) {
+	for {
+		for s.conn == nil {
+			s.conn, _ = rpc.Dial("tcp", s.Addr)
+		}
+
+		if err := s.conn.Call(str, args, reply); err == nil {
+			return
+		}
+		s.conn = nil
+	}
+}
+
 //=====================================================================
 // This is for the server.
 //=====================================================================
@@ -158,6 +171,7 @@ func sameNet(s1, s2 string) bool {
 }
 
 func LoadConfig(rstr, fname string) {
+	Clients = make(map[int]*serverConn)
 	rnames := strings.Split(rstr, ",")
 	myname, rnames := rnames[0], rnames[1:]
 
