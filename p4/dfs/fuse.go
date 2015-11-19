@@ -16,10 +16,12 @@ func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	in()
 	// p_out("Lookup for %q in \n%q\n", name, n)
 	if child, ok := n.kids[name]; ok { // in memory
+		// p_out("IN MEMORY\n\n")
 		out()
 		return child, nil
 	}
 	if child, ok := n.ChildSigs[name]; ok { // not in memory
+		// p_out("ON DISK\n\n")
 		node := getDNode(child)
 		node.parent = n
 		node.sig = child
@@ -79,6 +81,21 @@ func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 	if req.Valid.Flags() {
 		n.Attrs.Flags = req.Flags
 	}
+	// if req.Valid.Handle() {
+	// 	n.Attrs.Handle = req.Handle
+	// }
+	// if req.Valid.AtimeNow() {
+	// 	return fl&SetattrAtimeNow != 0
+	// }
+	// if req.Valid.MtimeNow() {
+	// 	return fl&SetattrMtimeNow != 0
+	// }
+	// if req.Valid.LockOwner() {
+	// 	return fl&SetattrLockOwner != 0
+	// }
+	// if req.Valid.Bkuptime() {
+	// 	return fl&SetattrBkuptime != 0
+	// }
 	resp.Attr = n.Attrs
 
 	out()
@@ -105,6 +122,7 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 	return d, nil
 }
 
+// TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	in()
 	p_out("Readdirall for %q\n\n", n)
@@ -133,6 +151,9 @@ func addDirEnt(n *DNode) fuse.Dirent {
 		typ = fuse.DT_File
 	}
 
+	if n.Attrs.Mode&os.ModeType == os.ModeSymlink {
+		typ = fuse.DT_Link
+	}
 	return fuse.Dirent{Inode: n.Attrs.Inode, Type: typ, Name: n.Name}
 }
 
@@ -165,6 +186,7 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 		if n.Attrs.Size > uint64(len(n.data)) {
 			n.data = n.readall()
 		}
+		// n.data = n.readall()
 		t := make([]byte, limit)
 		copy(t, n.data)
 		n.data = t
@@ -256,9 +278,6 @@ func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.N
 	if outDir, ok := newDir.(*DNode); ok {
 		p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, outDir)
 
-		n.kids[req.OldName].Name = req.NewName
-		outDir.kids[req.NewName] = n.kids[req.OldName]
-
 		if child, ok := n.kids[req.OldName]; ok {
 			child.Name = req.NewName
 			outDir.kids[req.NewName] = child
@@ -268,7 +287,6 @@ func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.N
 			outDir.kids[req.NewName] = getDNode(n.ChildSigs[req.OldName])
 		}
 
-		delete(n.kids, req.OldName)
 		delete(n.ChildSigs, req.OldName)
 		markDirty(n)
 		markDirty(outDir.kids[req.NewName])

@@ -63,6 +63,7 @@ type Head struct {
 	Replica uint64
 }
 
+var Debug = false
 var uid = uint32(os.Geteuid())
 var gid = uint32(os.Getegid())
 var root *DNode
@@ -73,11 +74,10 @@ var sem chan int
 
 var nodeMap map[uint64]*DNode
 
-var server *fs.Server
-
 type FS struct{}
 
 //=============================================================================
+// Let one at a time in
 
 func getHead() (*DNode, uint64) {
 	if val, err := db.Get([]byte("head"), nil); err == nil {
@@ -89,9 +89,8 @@ func getHead() (*DNode, uint64) {
 }
 
 func Init(mountPoint string, newfs bool, dbPath string) {
-	initStore(newfs, dbPath)
-
 	nodeMap = make(map[uint64]*DNode)
+	initStore(newfs, dbPath)
 
 	if n, ni := getHead(); n != nil {
 		root = n
@@ -103,11 +102,11 @@ func Init(mountPoint string, newfs bool, dbPath string) {
 		p_out("GETHEAD fail\n")
 		root = new(DNode)
 		root.init("", os.ModeDir|0755)
-		nodeMap[root.Attrs.Inode] = root
 
 		head = new(Head)
 		head.Root = root.sig
 		head.NextInd = nextInd
+		nodeMap[root.Attrs.Inode] = root
 	}
 	p_out("root %q", root)
 	p_out("root inode %v", root.Attrs.Inode)
@@ -135,13 +134,7 @@ func Init(mountPoint string, newfs bool, dbPath string) {
 	sem = make(chan int, 1)
 	go Flusher(sem)
 
-	for _, c := range Clients {
-		p_out("client: %s\n", c)
-	}
-
-	server = fs.New(c, nil)
-	err = server.Serve(FS{})
-
+	err = fs.Serve(c, FS{})
 	if err != nil {
 		log.Fatal(err)
 	}

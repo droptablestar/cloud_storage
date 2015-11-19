@@ -24,8 +24,6 @@ var Replicas map[int]*Replica
 var Merep *Replica
 var Clients map[int]*serverConn
 
-var Debug = false
-
 type Replica struct {
 	Name  string
 	Pid   int
