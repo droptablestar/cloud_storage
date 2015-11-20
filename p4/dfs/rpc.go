@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 //=====================================================================
@@ -101,16 +102,24 @@ func (nd *Node) Receive(n DNode, reply *Response) error {
 		nextInd++
 	}
 
+	if n.Version > version {
+		version = n.Version
+	} else if n.Version == version {
+		version++
+	}
+
 	if child, ok := nodeMap[n.Attrs.Inode]; ok { // in map
 		p_out("overwriting child data %q\n", child)
 		*child = n
 		nodeMap[n.Attrs.Inode].ChildSigs = n.ChildSigs
+		nodeMap[n.Attrs.Inode].DataBlocks = n.DataBlocks
 	} else {
 		p_out("overwriting %q\n", nodeMap[n.Attrs.Inode])
 		nodeMap[n.Attrs.Inode] = &n
 	}
 	nodeMap[n.Attrs.Inode].kids = make(map[string]*DNode)
 	p_out("new n = %q\n", nodeMap[n.Attrs.Inode])
+
 	if n.Attrs.Inode == root.Attrs.Inode {
 		head.Root = n.PrevSig
 		head.NextInd = nextInd
@@ -130,6 +139,7 @@ func (s serverConn) Call(str string, args interface{}, reply interface{}) {
 	for {
 		for s.conn == nil {
 			s.conn, _ = rpc.Dial("tcp", s.Addr)
+			defer s.conn.Close()
 		}
 
 		if err := s.conn.Call(str, args, reply); err == nil {
@@ -150,7 +160,12 @@ func ServeInterface(ip string, port int, arg interface{}) {
 	}
 	go func() {
 		for {
-			conn, _ := l.Accept()
+			conn, err := l.Accept()
+			if err != nil {
+				p_out("ERR: %s\n", err)
+				time.Sleep(time.Second)
+				continue
+			}
 			go rpc.ServeConn(conn)
 		}
 	}()

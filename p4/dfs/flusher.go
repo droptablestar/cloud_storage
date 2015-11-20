@@ -4,23 +4,6 @@ import (
 	"time"
 )
 
-func flush2(n *DNode) string {
-	for _, val := range n.kids {
-		if val.metaDirty {
-			p_out("flush(): %q\n", val)
-			n.metaDirty = true // sanity check
-			n.ChildSigs[val.Name] = flush(val)
-		}
-	}
-	if n.metaDirty {
-		p_out("flushing: %q\n", n)
-		n.Version = version
-		n.sig = putBlock(marshal(n))
-		n.metaDirty = false
-	}
-	return n.sig
-}
-
 func flush(n *DNode) string {
 	for _, val := range n.kids {
 		if val.metaDirty {

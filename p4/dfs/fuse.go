@@ -14,18 +14,24 @@ import (
 
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	in()
-	// p_out("Lookup for %q in \n%q\n", name, n)
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
+	p_out("Lookup for %q in \n%q\n", name, n)
 	if child, ok := n.kids[name]; ok { // in memory
-		// p_out("IN MEMORY\n\n")
+		p_out("IN MEMORY\n\n")
 		out()
 		return child, nil
 	}
 	if child, ok := n.ChildSigs[name]; ok { // not in memory
-		// p_out("ON DISK\n\n")
+		p_out("ON DISK\n\n")
 		node := getDNode(child)
 		node.parent = n
 		node.sig = child
 		n.kids[name] = node
+		nodeMap[node.Attrs.Inode] = node
 		out()
 		return node, nil
 	}
@@ -35,6 +41,11 @@ func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
 func (n *DNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	p_out("Attr %q <- \n%q\n\n", attr, n)
 	*attr = n.Attrs
 	out()
@@ -43,6 +54,11 @@ func (n *DNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 func (n *DNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	p_out("Getattr for %q in \n%q\n\n", req, n)
 	resp.Attr = n.Attrs
 	out()
@@ -51,6 +67,11 @@ func (n *DNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fus
 
 func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	p_out("Setattr for %q in \n%q\n\n", req, n)
 	// Setattr() should only be allowed to modify particular parts of a
 	if req.Valid.Mode() {
@@ -104,6 +125,11 @@ func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 
 func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	p_out("Mkdir %q in \n%q\n\n", req, n)
 	d := new(DNode)
 	d.init(req.Name, req.Mode)
@@ -125,6 +151,11 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 // TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	p_out("Readdirall for %q\n\n", n)
 	var dirDirs = []fuse.Dirent{}
 	for _, val := range n.kids {
@@ -159,6 +190,11 @@ func addDirEnt(n *DNode) fuse.Dirent {
 
 func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	p_out("Create req: %q \nin %q\n\n", req, n)
 	f := new(DNode)
 	f.init(req.Name, req.Mode)
@@ -167,7 +203,7 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 	n.kids[req.Name] = f
 
-	nodeMap[n.Attrs.Inode] = n
+	nodeMap[f.Attrs.Inode] = f
 	markDirty(f)
 
 	out()
@@ -176,6 +212,11 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	p_out("Write req: %q\nin %q\n\n", req, n)
 	olen := uint64(len(n.data))
 	wlen := uint64(len(req.Data))
@@ -202,15 +243,21 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 
 func (n *DNode) ReadAll(ctx context.Context) (b []byte, e error) {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	p_out("Readall: %q\n\n", n)
 	b = n.readall()
+	n.data = b
 	out()
 	return b, nil
 }
 
 func (n *DNode) readall() (b []byte) {
 	for _, dblk := range n.DataBlocks {
-		if n.Owner != Merep.Pid && getBlock(dblk) == nil {
+		if n.Owner != Merep.Pid {
 			p_out("Requesting block %s from %d\n", dblk, n.Owner)
 			var reply Response
 			Clients[n.Owner].Call("Node.Req",
@@ -237,11 +284,17 @@ func (n *DNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
 
 func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	p_out("Flush %q \nin %q\n\n", req, n)
 	if n.dirty {
 		n.Attrs.Atime = time.Now()
 		n.Attrs.Mtime = time.Now()
 		n.DataBlocks = putBlocks(n.data)
+		n.Owner = Merep.Pid
 		n.sig = shaString(marshal(n))
 
 		n.dirty = false
@@ -252,13 +305,17 @@ func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 
 func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error) {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	err = fuse.ENOENT
 	p_out("Remove %q from \n%q \n\n", req, n)
 	// If the DNode exists...delete it.
+	nid := -1
 	if val, ok := n.kids[req.Name]; ok {
-		if val.Attrs.Mode&os.ModeType == os.ModeSymlink {
-			n.Attrs.Nlink -= 1
-		}
+		nid = int(val.Attrs.Inode)
 		delete(n.kids, req.Name)
 		err = nil
 	}
@@ -268,6 +325,11 @@ func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error)
 	}
 	if err == nil {
 		markDirty(n)
+		if nid >= 0 {
+			if _, ok := nodeMap[uint64(nid)]; ok {
+				nodeMap[uint64(nid)] = nil
+			}
+		}
 	}
 	out()
 	return
@@ -275,6 +337,11 @@ func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error)
 
 func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
 	in()
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
 	if outDir, ok := newDir.(*DNode); ok {
 		p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, outDir)
 
