@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/syndtr/goleveldb/leveldb"
 	"os"
+	"time"
 )
 
 var db *leveldb.DB
@@ -133,7 +134,9 @@ func getDNode(sig string) *DNode {
 
 func markDirty(n *DNode) {
 	for ; n.parent != nil; n = n.parent {
+		n.Attrs.Atime = time.Now()
 		n.metaDirty = true
 	}
+	n.Attrs.Atime = time.Now()
 	n.metaDirty = true
 }

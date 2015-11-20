@@ -14,11 +14,7 @@ import (
 
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Lookup for %q in \n%q\n", name, n)
 	if child, ok := n.kids[name]; ok { // in memory
 		p_out("IN MEMORY\n\n")
@@ -41,11 +37,7 @@ func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
 func (n *DNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Attr %q <- \n%q\n\n", attr, n)
 	*attr = n.Attrs
 	out()
@@ -54,11 +46,7 @@ func (n *DNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 
 func (n *DNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Getattr for %q in \n%q\n\n", req, n)
 	resp.Attr = n.Attrs
 	out()
@@ -67,11 +55,7 @@ func (n *DNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fus
 
 func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Setattr for %q in \n%q\n\n", req, n)
 	// Setattr() should only be allowed to modify particular parts of a
 	if req.Valid.Mode() {
@@ -102,21 +86,6 @@ func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 	if req.Valid.Flags() {
 		n.Attrs.Flags = req.Flags
 	}
-	// if req.Valid.Handle() {
-	// 	n.Attrs.Handle = req.Handle
-	// }
-	// if req.Valid.AtimeNow() {
-	// 	return fl&SetattrAtimeNow != 0
-	// }
-	// if req.Valid.MtimeNow() {
-	// 	return fl&SetattrMtimeNow != 0
-	// }
-	// if req.Valid.LockOwner() {
-	// 	return fl&SetattrLockOwner != 0
-	// }
-	// if req.Valid.Bkuptime() {
-	// 	return fl&SetattrBkuptime != 0
-	// }
 	resp.Attr = n.Attrs
 
 	out()
@@ -125,11 +94,7 @@ func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fus
 
 func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Mkdir %q in \n%q\n\n", req, n)
 	d := new(DNode)
 	d.init(req.Name, req.Mode)
@@ -151,11 +116,7 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 // TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Readdirall for %q\n\n", n)
 	var dirDirs = []fuse.Dirent{}
 	for _, val := range n.kids {
@@ -190,11 +151,7 @@ func addDirEnt(n *DNode) fuse.Dirent {
 
 func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Create req: %q \nin %q\n\n", req, n)
 	f := new(DNode)
 	f.init(req.Name, req.Mode)
@@ -212,11 +169,7 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 
 func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Write req: %q\nin %q\n\n", req, n)
 	olen := uint64(len(n.data))
 	wlen := uint64(len(req.Data))
@@ -243,11 +196,7 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 
 func (n *DNode) ReadAll(ctx context.Context) (b []byte, e error) {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Readall: %q\n\n", n)
 	b = n.readall()
 	n.data = b
@@ -260,7 +209,7 @@ func (n *DNode) readall() (b []byte) {
 		if n.Owner != Merep.Pid {
 			p_out("Requesting block %s from %d\n", dblk, n.Owner)
 			var reply Response
-			Clients[n.Owner].Call("Node.Req",
+			Clients[n.Owner].Call("Node.ReqData",
 				&Request{dblk, Merep.Pid}, &reply)
 			if reply.Ack {
 				b = append(b, reply.Block...)
@@ -284,11 +233,7 @@ func (n *DNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
 
 func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	p_out("Flush %q \nin %q\n\n", req, n)
 	if n.dirty {
 		n.Attrs.Atime = time.Now()
@@ -305,11 +250,7 @@ func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 
 func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error) {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	err = fuse.ENOENT
 	p_out("Remove %q from \n%q \n\n", req, n)
 	// If the DNode exists...delete it.
@@ -337,11 +278,7 @@ func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error)
 
 func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
 	in()
-	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
-		n = nd
-	} else {
-		nodeMap[n.Attrs.Inode] = n
-	}
+	findDNode(n)
 	if outDir, ok := newDir.(*DNode); ok {
 		p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, outDir)
 

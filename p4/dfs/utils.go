@@ -15,6 +15,14 @@ func contains(s []string, e string) bool {
 	return false
 }
 
+func findDNode(n *DNode) {
+	if nd, ok := nodeMap[n.Attrs.Inode]; ok {
+		n = nd
+	} else {
+		nodeMap[n.Attrs.Inode] = n
+	}
+}
+
 func p_out(s string, args ...interface{}) {
 	if !Debug {
 		return

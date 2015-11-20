@@ -59,6 +59,7 @@ type Response struct {
 	Ack   bool
 	Pid   int
 	Block []byte
+	DN    DNode
 }
 
 func (r *Response) String() string {
@@ -77,7 +78,17 @@ func (r *Request) String() string {
 //=====================================================================
 // This is for the client.
 //=====================================================================
-func (nd *Node) Req(r *Request, reply *Response) error {
+func (nd *Node) ReqDNode(r *Request, reply *Response) error {
+	reply.Pid = Merep.Pid
+	n := getDNode(r.Sig)
+	reply.Ack = true
+	reply.DN = *n
+	p_out("Sending DNode %s to %d\n", n.Name, r.Pid)
+
+	return nil
+}
+
+func (nd *Node) ReqData(r *Request, reply *Response) error {
 	reply.Pid = Merep.Pid
 	if b := getBlock(r.Sig); b != nil {
 		reply.Ack = true
@@ -135,11 +146,15 @@ func NewServerConn(ip string, port int) *serverConn {
 	return &serverConn{port: port, Addr: ip + fmt.Sprintf(":%d", port)}
 }
 
-func (s serverConn) Call(str string, args interface{}, reply interface{}) {
+func (s *serverConn) Call(str string, args interface{}, reply interface{}) {
+	i := 0
 	for {
 		for s.conn == nil {
 			s.conn, _ = rpc.Dial("tcp", s.Addr)
-			defer s.conn.Close()
+			if i > 50 {
+				return
+			}
+			i++
 		}
 
 		if err := s.conn.Call(str, args, reply); err == nil {
