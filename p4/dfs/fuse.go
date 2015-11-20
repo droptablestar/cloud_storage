@@ -25,19 +25,10 @@ func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 		p_out("ON DISK\n\n")
 		node := getDNode(child)
 		if node == nil {
-			if n.Owner != Merep.Pid {
-				var reply Response
-				p_out("Requesting DNODE: %s\n", name)
-				Clients[n.Owner].Call("Node.ReqDNode",
-					&Request{name, Merep.Pid}, &reply)
-				if reply.DN != nil {
-					out()
-					return reply.DN, nil
-				}
-
+			if node = getRemoteDNode(n.Owner, child); node == nil {
+				out()
+				return nil, fuse.ENOENT // doesn't exist
 			}
-			out()
-			return nil, fuse.ENOENT
 		}
 		node.parent = n
 		node.sig = child
@@ -140,6 +131,11 @@ func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	for key, val := range n.ChildSigs {
 		if _, ok := n.kids[key]; !ok {
 			cn := getDNode(val)
+			if cn == nil {
+				if cn = getRemoteDNode(n.Owner, val); cn == nil {
+					continue
+				}
+			}
 			dirDirs = append(dirDirs, addDirEnt(cn))
 		}
 	}

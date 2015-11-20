@@ -132,6 +132,22 @@ func getDNode(sig string) *DNode {
 	}
 }
 
+func getRemoteDNode(owner int, name string) *DNode {
+	if owner != Merep.Pid {
+		var reply Response
+		p_out("Requesting DNODE: %s\n", name)
+		Clients[owner].Call("Node.ReqDNode",
+			&Request{name, Merep.Pid}, &reply)
+		if reply.DN != nil {
+			reply.DN.kids = make(map[string]*DNode)
+			return reply.DN
+		}
+
+	}
+	p_out("ERROR: getRemoteDNode\n")
+	return nil
+}
+
 func markDirty(n *DNode) {
 	for ; n.parent != nil; n = n.parent {
 		n.Attrs.Atime = time.Now()
