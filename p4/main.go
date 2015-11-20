@@ -16,7 +16,7 @@ func main() {
 	var c int
 
 	for {
-		if c = Getopt("ndf:m:r:"); c == EOF {
+		if c = Getopt("ndtf:m:r:"); c == EOF {
 			break
 		}
 
@@ -27,6 +27,8 @@ func main() {
 			dfs.Debug = !dfs.Debug
 		case 'f':
 			dfs.FlusherPeriod, _ = strconv.Atoi(OptArg)
+		case 't':
+			dfs.Token = true
 		case 'm':
 			dfs.ModeConsistency = OptArg
 		case 'r':
@@ -36,8 +38,8 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	fmt.Printf("\nStartup up with debug %v, flush period %v, %smode: %q, replicaStr  %q\n\n",
-		dfs.Debug, dfs.FlusherPeriod, newfs, dfs.ModeConsistency, replicaString)
+	fmt.Printf("\nStartup up with debug %v, flush period %v, %smode: %q, replicaStr  %q token: %t\n\n",
+		dfs.Debug, dfs.FlusherPeriod, newfs, dfs.ModeConsistency, replicaString, dfs.Token)
 
 	dfs.LoadConfig(replicaString, "config.txt")
 	for _, r := range dfs.Replicas {

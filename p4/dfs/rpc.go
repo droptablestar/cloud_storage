@@ -78,6 +78,22 @@ func (r *Request) String() string {
 //=====================================================================
 // This is for the client.
 //=====================================================================
+func (nd *Node) ReqToken(r *Request, reply *Response) error {
+	if Token {
+		reply.Pid = Merep.Pid
+		reply.Ack = true
+		in()
+		flushRoot()
+		out()
+		p_out("Sending Token %d\n", r.Pid)
+		Token = false
+	} else {
+		p_out("I don't have the token (%d)\n", Merep.Pid)
+	}
+
+	return nil
+}
+
 func (nd *Node) ReqDNode(r *Request, reply *Response) error {
 	reply.Pid = Merep.Pid
 	n := getDNode(r.Sig)
@@ -123,12 +139,12 @@ func (nd *Node) Receive(n DNode, reply *Response) error {
 	}
 
 	if child, ok := nodeMap[n.Attrs.Inode]; ok { // in map
-		p_out("overwriting child data %q\n", child)
+		// p_out("overwriting child data %q\n", child)
 		*child = n
 		nodeMap[n.Attrs.Inode].ChildSigs = n.ChildSigs
 		nodeMap[n.Attrs.Inode].DataBlocks = n.DataBlocks
 	} else {
-		p_out("overwriting %q\n", nodeMap[n.Attrs.Inode])
+		// p_out("overwriting %q\n", nodeMap[n.Attrs.Inode])
 		nodeMap[n.Attrs.Inode] = &n
 	}
 	nodeMap[n.Attrs.Inode].kids = make(map[string]*DNode)

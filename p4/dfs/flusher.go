@@ -29,29 +29,32 @@ func flush(n *DNode) string {
 	return n.sig
 }
 
+func flushRoot() {
+	if root.metaDirty {
+		// p_out("FLUSHING root: %q\n", root)
+		flush(root)
+		version++
+
+		head.Root = root.PrevSig
+		head.NextInd = nextInd
+		putBlockSig("head", marshal(head))
+	} else {
+		for _, c := range Clients {
+			var reply Response
+			p_out("sending %s to %s:%d\n", root, c.Addr, c.port)
+			c.Call("Node.Receive", *root, &reply)
+			p_out("Response from %s:%d -- %q\n",
+				c.Addr, c.port, &reply)
+		}
+	}
+}
+
 func Flusher(sem chan int) {
 	for {
 		time.Sleep(time.Duration(FlusherPeriod) * time.Second)
 		in()
 		// p_out("\n\tFLUSHER\n\n")
-		if root.metaDirty {
-			// p_out("FLUSHING root: %q\n", root)
-			flush(root)
-			version++
-
-			head.Root = root.PrevSig
-			head.NextInd = nextInd
-			putBlockSig("head", marshal(head))
-		} else {
-			for _, c := range Clients {
-				var reply Response
-				p_out("sending %s to %s:%d\n", root, c.Addr, c.port)
-				c.Call("Node.Receive", *root, &reply)
-				p_out("Response from %s:%d -- %q\n",
-					c.Addr, c.port, &reply)
-			}
-		}
-
+		flushRoot()
 		out()
 	}
 }

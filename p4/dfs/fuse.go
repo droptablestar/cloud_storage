@@ -110,7 +110,6 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 	d.parent = n
 
 	n.kids[req.Name] = d
-	// n.ChildSigs[req.Name] = d.sig
 
 	nodeMap[d.Attrs.Inode] = d
 	markDirty(d)
@@ -119,7 +118,6 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 	return d, nil
 }
 
-// TODO: This seems verbose. Can I find a better way to copy the data out?
 func (n *DNode) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	in()
 	findDNode(n)
@@ -191,7 +189,6 @@ func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wr
 		if n.Attrs.Size > uint64(len(n.data)) {
 			n.data = n.readall()
 		}
-		// n.data = n.readall()
 		t := make([]byte, limit)
 		copy(t, n.data)
 		n.data = t
