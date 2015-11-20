@@ -15,14 +15,14 @@ import (
 func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	in()
 	findDNode(n)
-	p_out("Lookup for %q in \n%q\n", name, n)
+	// p_out("Lookup for %q in \n%q\n", name, n)
 	if child, ok := n.kids[name]; ok { // in memory
-		p_out("IN MEMORY\n\n")
+		// p_out("IN MEMORY\n\n")
 		out()
 		return child, nil
 	}
 	if child, ok := n.ChildSigs[name]; ok { // not in memory
-		p_out("ON DISK\n\n")
+		// p_out("ON DISK\n\n")
 		node := getDNode(child)
 		if node == nil {
 			if node = getRemoteDNode(n.Owner, child); node == nil {
@@ -31,6 +31,7 @@ func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 			}
 		}
 		node.parent = n
+		node.Parent = n.Attrs.Inode
 		node.sig = child
 		n.kids[name] = node
 		nodeMap[node.Attrs.Inode] = node
@@ -44,7 +45,7 @@ func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 func (n *DNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	in()
 	findDNode(n)
-	p_out("Attr %q <- \n%q\n\n", attr, n)
+	// p_out("Attr %q <- \n%q\n\n", attr, n)
 	*attr = n.Attrs
 	out()
 	return nil
@@ -53,7 +54,7 @@ func (n *DNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 func (n *DNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fuse.GetattrResponse) error {
 	in()
 	findDNode(n)
-	p_out("Getattr for %q in \n%q\n\n", req, n)
+	// p_out("Getattr for %q in \n%q\n\n", req, n)
 	resp.Attr = n.Attrs
 	out()
 	return nil
@@ -62,7 +63,7 @@ func (n *DNode) Getattr(ctx context.Context, req *fuse.GetattrRequest, resp *fus
 func (n *DNode) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	in()
 	findDNode(n)
-	p_out("Setattr for %q in \n%q\n\n", req, n)
+	// p_out("Setattr for %q in \n%q\n\n", req, n)
 	// Setattr() should only be allowed to modify particular parts of a
 	if req.Valid.Mode() {
 		n.Attrs.Mode = req.Mode
@@ -108,6 +109,7 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 	d.Attrs.Gid = req.Header.Gid
 	d.sig = shaString(marshal(d))
 	d.parent = n
+	d.Parent = n.Attrs.Inode
 
 	n.kids[req.Name] = d
 
@@ -161,11 +163,12 @@ func addDirEnt(n *DNode) fuse.Dirent {
 func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
 	in()
 	findDNode(n)
-	p_out("Create req: %q \nin %q\n\n", req, n)
+	// p_out("Create req: %q \nin %q\n\n", req, n)
 	f := new(DNode)
 	f.init(req.Name, req.Mode)
 	f.sig = shaString(marshal(f))
 	f.parent = n
+	f.Parent = n.Attrs.Inode
 
 	n.kids[req.Name] = f
 
@@ -179,7 +182,7 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 func (n *DNode) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	in()
 	findDNode(n)
-	p_out("Write req: %q\nin %q\n\n", req, n)
+	// p_out("Write req: %q\nin %q\n\n", req, n)
 	olen := uint64(len(n.data))
 	wlen := uint64(len(req.Data))
 	offset := uint64(req.Offset)
@@ -233,7 +236,7 @@ func (n *DNode) readall() (b []byte) {
 
 func (n *DNode) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
 	in()
-	p_out("fsync for %q\n\n", n)
+	// p_out("fsync for %q\n\n", n)
 	out()
 	return nil
 }
@@ -250,6 +253,7 @@ func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 		n.sig = shaString(marshal(n))
 
 		n.dirty = false
+		p_out("DIRTY: %q\n", n)
 	}
 	out()
 	return nil
@@ -259,7 +263,7 @@ func (n *DNode) Remove(ctx context.Context, req *fuse.RemoveRequest) (err error)
 	in()
 	findDNode(n)
 	err = fuse.ENOENT
-	p_out("Remove %q from \n%q \n\n", req, n)
+	// p_out("Remove %q from \n%q \n\n", req, n)
 	// If the DNode exists...delete it.
 	nid := -1
 	if val, ok := n.kids[req.Name]; ok {
@@ -287,7 +291,7 @@ func (n *DNode) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.N
 	in()
 	findDNode(n)
 	if outDir, ok := newDir.(*DNode); ok {
-		p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, outDir)
+		// p_out("Rename: \nreq: %q \nn: %q \nnew: %q\n\n", req, n, outDir)
 
 		if child, ok := n.kids[req.OldName]; ok {
 			child.Name = req.NewName

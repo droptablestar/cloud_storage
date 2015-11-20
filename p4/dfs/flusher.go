@@ -7,7 +7,7 @@ import (
 func flush(n *DNode) string {
 	for _, val := range n.kids {
 		if val.metaDirty {
-			// p_out("flush(): %q\n", val)
+			p_out("flush(): %q\n", val)
 			n.metaDirty = true // sanity check
 			n.ChildSigs[val.Name] = flush(val)
 		}
@@ -30,8 +30,8 @@ func flush(n *DNode) string {
 }
 
 func flushRoot() {
+	p_out("flushRoot: %q\n", root)
 	if root.metaDirty {
-		// p_out("FLUSHING root: %q\n", root)
 		flush(root)
 		version++
 

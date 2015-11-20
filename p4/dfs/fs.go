@@ -21,19 +21,19 @@ type DNode struct {
 	ChildSigs  map[string]string
 	DataBlocks []string
 	Owner      int
+	Parent     uint64
 
 	sig       string
 	dirty     bool
 	metaDirty bool
-	expanded  bool
 	parent    *DNode
 	kids      map[string]*DNode
 	data      []byte
 }
 
 func (d *DNode) String() string {
-	return fmt.Sprintf("Version: %d, Name: %s Inode: %d, time: %s",
-		d.Version, d.Name, d.Attrs.Inode, d.Attrs.Atime)
+	return fmt.Sprintf("Version: %d, Name: %s, Owner: %d, Parent: %d, meta: %t",
+		d.Version, d.Name, d.Owner, d.Parent, d.metaDirty)
 }
 
 func (d *DNode) init(name string, mode os.FileMode) {

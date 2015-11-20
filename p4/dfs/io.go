@@ -149,10 +149,27 @@ func getRemoteDNode(owner int, name string) *DNode {
 }
 
 func markDirty(n *DNode) {
-	for ; n.parent != nil; n = n.parent {
-		n.Attrs.Atime = time.Now()
-		n.metaDirty = true
+	p_out("MARK: %q\n", n)
+	var nd = n
+	for {
+		p, ok := nodeMap[nd.Parent]
+		if nd.parent == nil && !ok {
+			break
+		}
+		if nd.parent == nil {
+			p.Attrs.Atime = time.Now()
+			p.metaDirty = true
+			p.kids[nd.Name] = nd
+			nd = p
+			p_out("MARK P: %q\n", p)
+		} else {
+			nd.parent.Attrs.Atime = time.Now()
+			nd.parent.metaDirty = true
+			nd = nd.parent
+			p_out("MARK N: %q\n", n.parent)
+		}
 	}
 	n.Attrs.Atime = time.Now()
 	n.metaDirty = true
+	p_out("MARKED: %q\n", n)
 }
