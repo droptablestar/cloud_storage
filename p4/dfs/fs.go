@@ -109,6 +109,7 @@ func Init(mountPoint string, newfs bool, dbPath string) {
 		p_out("GETHEAD fail\n")
 		root = new(DNode)
 		root.init("", os.ModeDir|0755)
+		root.Attrs.Atime = time.Now().Add(-(60 * time.Minute))
 
 		head = new(Head)
 		head.Root = root.sig
