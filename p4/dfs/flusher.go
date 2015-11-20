@@ -42,6 +42,14 @@ func Flusher(sem chan int) {
 			head.Root = root.PrevSig
 			head.NextInd = nextInd
 			putBlockSig("head", marshal(head))
+		} else {
+			for _, c := range Clients {
+				var reply Response
+				p_out("sending %s to %s:%d\n", root, c.Addr, c.port)
+				c.Call("Node.Receive", *root, &reply)
+				p_out("Response from %s:%d -- %q\n",
+					c.Addr, c.port, &reply)
+			}
 		}
 
 		out()

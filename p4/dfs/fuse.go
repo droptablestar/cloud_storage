@@ -24,6 +24,21 @@ func (n *DNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	if child, ok := n.ChildSigs[name]; ok { // not in memory
 		p_out("ON DISK\n\n")
 		node := getDNode(child)
+		if node == nil {
+			if n.Owner != Merep.Pid {
+				var reply Response
+				p_out("Requesting DNODE: %s\n", name)
+				Clients[n.Owner].Call("Node.ReqDNode",
+					&Request{name, Merep.Pid}, &reply)
+				if reply.DN != nil {
+					out()
+					return reply.DN, nil
+				}
+
+			}
+			out()
+			return nil, fuse.ENOENT
+		}
 		node.parent = n
 		node.sig = child
 		n.kids[name] = node
@@ -216,7 +231,6 @@ func (n *DNode) readall() (b []byte) {
 			} else {
 				p_err("Block request %s to %d failed\n", dblk, n.Owner)
 			}
-
 		} else {
 			b = append(b, getBlock(dblk)...)
 		}

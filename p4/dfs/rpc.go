@@ -59,7 +59,7 @@ type Response struct {
 	Ack   bool
 	Pid   int
 	Block []byte
-	DN    DNode
+	DN    *DNode
 }
 
 func (r *Response) String() string {
@@ -82,7 +82,7 @@ func (nd *Node) ReqDNode(r *Request, reply *Response) error {
 	reply.Pid = Merep.Pid
 	n := getDNode(r.Sig)
 	reply.Ack = true
-	reply.DN = *n
+	reply.DN = n
 	p_out("Sending DNode %s to %d\n", n.Name, r.Pid)
 
 	return nil
@@ -102,7 +102,7 @@ func (nd *Node) ReqData(r *Request, reply *Response) error {
 }
 
 func (nd *Node) Receive(n DNode, reply *Response) error {
-	if n.Attrs.Atime.Before(root.Attrs.Atime) {
+	if n.Attrs.Atime.Before(root.Attrs.Atime.Add((1 * time.Millisecond))) {
 		return nil
 	}
 	p_out("received %q from %d\n", &n, n.Owner)

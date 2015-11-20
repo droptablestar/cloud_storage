@@ -32,14 +32,8 @@ type DNode struct {
 }
 
 func (d *DNode) String() string {
-	var p string
-	if d.parent == nil {
-		p = "nil"
-	} else {
-		p = d.parent.Name
-	}
-	return fmt.Sprintf("Version: %d, Name: %s Inode: %d, parent: %s",
-		d.Version, d.Name, d.Attrs.Inode, p)
+	return fmt.Sprintf("Version: %d, Name: %s Inode: %d, time: %s",
+		d.Version, d.Name, d.Attrs.Inode, d.Attrs.Atime)
 }
 
 func (d *DNode) init(name string, mode os.FileMode) {
