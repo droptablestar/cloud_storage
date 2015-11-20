@@ -102,10 +102,10 @@ func (nd *Node) ReqData(r *Request, reply *Response) error {
 }
 
 func (nd *Node) Receive(n DNode, reply *Response) error {
-	p_out("received %q from %d\n", &n, n.Owner)
 	if n.Attrs.Atime.Before(root.Attrs.Atime) {
 		return nil
 	}
+	p_out("received %q from %d\n", &n, n.Owner)
 	n.PrevSig = putBlock(marshal(n))
 	n.sig = n.PrevSig
 	n.metaDirty = false

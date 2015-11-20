@@ -31,7 +31,7 @@ func flush(n *DNode) string {
 
 func Flusher(sem chan int) {
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(time.Duration(FlusherPeriod) * time.Second)
 		in()
 		// p_out("\n\tFLUSHER\n\n")
 		if root.metaDirty {

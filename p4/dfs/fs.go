@@ -71,6 +71,9 @@ type Head struct {
 }
 
 var Debug = false
+var FlusherPeriod = 5
+var ModeConsistency = "none"
+
 var uid = uint32(os.Geteuid())
 var gid = uint32(os.Getegid())
 var root *DNode

@@ -10,8 +10,6 @@ import (
 )
 
 var newfs string
-var flusherPeriod = 5
-var modeConsistency = "none"
 var replicaString = "auto"
 
 func main() {
@@ -28,9 +26,9 @@ func main() {
 		case 'd':
 			dfs.Debug = !dfs.Debug
 		case 'f':
-			flusherPeriod, _ = strconv.Atoi(OptArg)
+			dfs.FlusherPeriod, _ = strconv.Atoi(OptArg)
 		case 'm':
-			modeConsistency = OptArg
+			dfs.ModeConsistency = OptArg
 		case 'r':
 			replicaString = OptArg
 		default:
@@ -39,7 +37,7 @@ func main() {
 		}
 	}
 	fmt.Printf("\nStartup up with debug %v, flush period %v, %smode: %q, replicaStr  %q\n\n",
-		dfs.Debug, flusherPeriod, newfs, modeConsistency, replicaString)
+		dfs.Debug, dfs.FlusherPeriod, newfs, dfs.ModeConsistency, replicaString)
 
 	dfs.LoadConfig(replicaString, "config.txt")
 	for _, r := range dfs.Replicas {
@@ -50,7 +48,7 @@ func main() {
 	}
 	go func() {
 		dfs.ServeInterface(dfs.Merep.Addr, dfs.Merep.Port, new(dfs.Node))
-		fmt.Printf("\nDebug %v, mountpt: %q, %sstorePath %q, at%s:%d\n\n",
+		fmt.Printf("\nDebug %v, mountpt: %q, %sstorePath %q, at %s:%d\n\n",
 			dfs.Debug, dfs.Merep.Mount, newfs, dfs.Merep.Db,
 			dfs.Merep.Addr, dfs.Merep.Port)
 		dfs.Init(dfs.Merep.Mount, newfs != "", dfs.Merep.Db)
