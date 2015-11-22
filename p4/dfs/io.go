@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/syndtr/goleveldb/leveldb"
-	"log"
 	"os"
+	"time"
 )
 
 var db *leveldb.DB
@@ -23,25 +23,8 @@ const (
 var b uint64 = 0
 var saved [256]uint64
 
-func p_out(s string, args ...interface{}) {
-	if !debug {
-		return
-	}
-	log.Printf(s, args...)
-}
-
-func p_err(s string, args ...interface{}) {
-	log.Printf(s, args...)
-	os.Exit(1)
-}
-
 //=============================================================================
 func initStore(newfs bool, dbPath string) {
-	/*
-		d = diskv.New(diskv.Options{
-			BasePath:     "key-store",
-			CacheSizeMax: 1024 * 1024,
-		})*/
 	var err error
 
 	if newfs {
@@ -50,7 +33,7 @@ func initStore(newfs bool, dbPath string) {
 	db, err = leveldb.OpenFile(dbPath, nil)
 
 	if err != nil {
-		panic("no open db\n")
+		p_die("no open db: %s\n", err)
 	}
 }
 
@@ -144,33 +127,49 @@ func getDNode(sig string) *DNode {
 		n.kids = make(map[string]*DNode)
 		return n
 	} else {
-		p_err("ERROR: getDNode [%s]\n", err)
+		p_out("ERROR: getDNode [%s]\n", err)
 		return nil
 	}
 }
 
-func markDirty(n *DNode) {
-	for ; n.parent != nil; n = n.parent {
-		// p_out("MARKING %q\n", n)
-		n.metaDirty = true
+func getRemoteDNode(owner int, name string) *DNode {
+	if owner != Merep.Pid {
+		var reply Response
+		p_out("Requesting DNODE: %s\n", name)
+		Clients[owner].Call("Node.ReqDNode",
+			&Request{name, Merep.Pid}, &reply)
+		if reply.DN != nil {
+			reply.DN.kids = make(map[string]*DNode)
+			return reply.DN
+		}
+
 	}
-	// p_out("OUT MARKING %q\n", n)
-	n.metaDirty = true
+	p_out("ERROR: getRemoteDNode\n")
+	return nil
 }
 
-func flush(n *DNode) string {
-	for _, val := range n.kids {
-		if val.metaDirty {
-			p_out("flush(): %q\n", val)
-			n.metaDirty = true // sanity check
-			n.ChildSigs[val.Name] = flush(val)
+func markDirty(n *DNode) {
+	p_out("MARK: %q\n", n)
+	var nd = n
+	for {
+		p, ok := nodeMap[nd.Parent]
+		if nd.parent == nil && !ok {
+			break
+		}
+		if nd.parent == nil {
+			p.Attrs.Atime = time.Now()
+			p.metaDirty = true
+			p.kids[nd.Name] = nd
+			nd = p
+			p_out("MARK P: %q\n", p)
+		} else {
+			nd.parent.Attrs.Atime = time.Now()
+			nd.parent.metaDirty = true
+			nd = nd.parent
+			p_out("MARK N: %q\n", n.parent)
 		}
 	}
-	if n.metaDirty {
-		p_out("flushing: %q\n", n)
-		n.Version = version
-		n.sig = putBlock(marshal(n))
-		n.metaDirty = false
-	}
-	return n.sig
+	n.Attrs.Atime = time.Now()
+	n.metaDirty = true
+	p_out("MARKED: %q\n", n)
 }

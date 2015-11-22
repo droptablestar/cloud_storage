@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"time"
 
@@ -22,27 +21,20 @@ type DNode struct {
 	ChildSigs  map[string]string
 	DataBlocks []string
 	Owner      int
-	IsRoot     bool
+	Parent     uint64
 
 	sig       string
 	dirty     bool
 	metaDirty bool
-	expanded  bool
 	parent    *DNode
-	archive   bool
 	kids      map[string]*DNode
 	data      []byte
 }
 
 func (d *DNode) String() string {
-	return fmt.Sprintf("Version: %d, Name: %s, ChildSigs: %q addr: %p",
-		d.Version, d.Name, d.ChildSigs, d)
+	return fmt.Sprintf("Version: %d, Name: %s, Owner: %d, Parent: %d, meta: %t",
+		d.Version, d.Name, d.Owner, d.Parent, d.metaDirty)
 }
-
-// func (d *DNode) String() string {
-// 	return fmt.Sprintf("Version: %d, Name: %s, Attrs: {%q}, PrevSig: %s, ChildSigs: %#v, DataBlocks: %#v, sig: [%s], Parent: [%v], meta: %t, kids: %#v, archive: %t\n",
-// 		d.Version, d.Name, d.Attrs, d.PrevSig, d.ChildSigs, d.DataBlocks, d.sig, d.parent, d.metaDirty, d.kids, d.archive)
-// }
 
 func (d *DNode) init(name string, mode os.FileMode) {
 	startTime := time.Now()
@@ -72,68 +64,55 @@ type Head struct {
 	Replica uint64
 }
 
-var tmStr = ""
-var compress = false
+var Debug = false
+var FlusherPeriod = 5
+var ModeConsistency = "none"
+var Token = false
+
 var uid = uint32(os.Geteuid())
 var gid = uint32(os.Getegid())
 var root *DNode
 var head *Head
 var nextInd uint64 = 1
 var version uint64 = 1
-var replicaID uint64
-var inPast bool
 var sem chan int
 
-var server *fs.Server
+var nodeMap map[uint64]*DNode
 
 type FS struct{}
 
 //=============================================================================
+// Let one at a time in
 
 func getHead() (*DNode, uint64) {
 	if val, err := db.Get([]byte("head"), nil); err == nil {
 		p_out("FOUND HEAD!")
 		json.Unmarshal(val, &head)
-		if tmStr == "" {
-			return getDNode(head.Root), head.NextInd
-		}
-		loc, _ := time.LoadLocation("Local")
-		tmTime, err := time.ParseInLocation("2006-01-02T15:04:05", tmStr, loc)
-		if err != nil {
-			panic(err)
-		}
-		p_out("%q\n", tmTime)
-
-		root = getDNode(head.Root)
-		if tmTime.After(root.Attrs.Atime) {
-			return root, head.NextInd
-		}
-		root = root.timeTravel(tmTime)
-		inPast = true
-		return root, 0
+		return getDNode(head.Root), head.NextInd
 	}
 	return nil, 0
 }
 
 func Init(mountPoint string, newfs bool, dbPath string) {
+	nodeMap = make(map[uint64]*DNode)
 	initStore(newfs, dbPath)
-
-	replicaID = uint64(rand.Int63())
 
 	if n, ni := getHead(); n != nil {
 		root = n
 		root.sig = head.Root
 		nextInd = ni
 		version = n.Version + 1
+		nodeMap[root.Attrs.Inode] = root
 	} else {
 		p_out("GETHEAD fail\n")
 		root = new(DNode)
 		root.init("", os.ModeDir|0755)
-		root.IsRoot = true
+		root.Attrs.Atime = time.Now().Add(-(60 * time.Minute))
 
 		head = new(Head)
 		head.Root = root.sig
 		head.NextInd = nextInd
+		nodeMap[root.Attrs.Inode] = root
 	}
 	p_out("root %q", root)
 	p_out("root inode %v", root.Attrs.Inode)
@@ -146,10 +125,6 @@ func Init(mountPoint string, newfs bool, dbPath string) {
 	c, err := fuse.Mount(mountPoint)
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if p := c.Protocol(); !p.HasInvalidate() {
-		p_die("kernel FUSE support is too old to have invalidations: version %v", p)
 	}
 
 	ch := make(chan os.Signal, 1)
@@ -165,13 +140,7 @@ func Init(mountPoint string, newfs bool, dbPath string) {
 	sem = make(chan int, 1)
 	go Flusher(sem)
 
-	for _, c := range Clients {
-		p_out("client: %s\n", c)
-	}
-
-	server = fs.New(c, nil)
-	err = server.Serve(FS{})
-
+	err = fs.Serve(c, FS{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -189,28 +158,6 @@ func in() {
 
 func out() {
 	<-sem
-}
-
-// ...
-
-func Flusher(sem chan int) {
-	for {
-		time.Sleep(5 * time.Second)
-		in()
-		// p_out("\n\tFLUSHER\n\n")
-		if root.metaDirty {
-			// p_out("FLUSHING\n")
-			root.Attrs.Atime = time.Now()
-			flush(root)
-			version++
-
-			head.Root = root.PrevSig
-			head.NextInd = nextInd
-			putBlockSig("head", marshal(head))
-		}
-
-		out()
-	}
 }
 
 //=============================================================================

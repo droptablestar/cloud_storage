@@ -1,9 +1,5 @@
 package dfs
 
-/*
- Two main files are ../fuse.go and ../fs/serve.go
-*/
-
 import (
 	"fmt"
 	"os"

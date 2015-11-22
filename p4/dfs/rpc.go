@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 //=====================================================================
@@ -22,9 +23,7 @@ var pid int
 
 var Replicas map[int]*Replica
 var Merep *Replica
-var Clients []*serverConn
-
-var Debug = false
+var Clients map[int]*serverConn
 
 type Replica struct {
 	Name  string
@@ -57,25 +56,124 @@ func (n *Node) string() string {
 }
 
 type Response struct {
-	Ack bool
-	Pid int
+	Ack   bool
+	Pid   int
+	Block []byte
+	DN    *DNode
 }
 
 func (r *Response) String() string {
 	return fmt.Sprintf("Ack: [%t] Pid: %d\n", r.Ack, r.Pid)
 }
 
+type Request struct {
+	Sig string
+	Pid int
+}
+
+func (r *Request) String() string {
+	return fmt.Sprintf("Sig: [%s] Pid: %d\n", r.Sig, r.Pid)
+}
+
 //=====================================================================
 // This is for the client.
 //=====================================================================
+func (nd *Node) ReqToken(r *Request, reply *Response) error {
+	if Token {
+		reply.Pid = Merep.Pid
+		reply.Ack = true
+		in()
+		flushRoot()
+		out()
+		p_out("Sending Token %d\n", r.Pid)
+		Token = false
+	} else {
+		p_out("I don't have the token (%d)\n", Merep.Pid)
+	}
+
+	return nil
+}
+
+func (nd *Node) ReqDNode(r *Request, reply *Response) error {
+	reply.Pid = Merep.Pid
+	n := getDNode(r.Sig)
+	reply.Ack = true
+	reply.DN = n
+	p_out("Sending DNode %s to %d\n", n.Name, r.Pid)
+
+	return nil
+}
+
+func (nd *Node) ReqData(r *Request, reply *Response) error {
+	reply.Pid = Merep.Pid
+	if b := getBlock(r.Sig); b != nil {
+		reply.Ack = true
+		reply.Block = b
+		p_out("Sending block %s to %d\n", r.Sig, r.Pid)
+	} else {
+		reply.Ack = false
+		reply.Block = nil
+	}
+	return nil
+}
+
+func (nd *Node) Receive(n DNode, reply *Response) error {
+	p_out("received %q from %d\n", &n, n.Owner)
+	if n.Attrs.Atime.Before(root.Attrs.Atime.Add((1 * time.Millisecond))) {
+		return nil
+	}
+	n.PrevSig = putBlock(marshal(n))
+	n.sig = n.PrevSig
+	n.metaDirty = false
+
+	if n.Attrs.Inode > nextInd {
+		nextInd = n.Attrs.Inode
+	} else if n.Attrs.Inode == nextInd {
+		nextInd++
+	}
+
+	if n.Version > version {
+		version = n.Version
+	} else if n.Version == version {
+		version++
+	}
+
+	if child, ok := nodeMap[n.Attrs.Inode]; ok { // in map
+		// p_out("overwriting child data %q\n", child)
+		*child = n
+		nodeMap[n.Attrs.Inode].ChildSigs = n.ChildSigs
+		nodeMap[n.Attrs.Inode].DataBlocks = n.DataBlocks
+	} else {
+		// p_out("overwriting %q\n", nodeMap[n.Attrs.Inode])
+		nodeMap[n.Attrs.Inode] = &n
+	}
+	nodeMap[n.Attrs.Inode].kids = make(map[string]*DNode)
+	p_out("new n = %q\n", nodeMap[n.Attrs.Inode])
+
+	if n.Attrs.Inode == root.Attrs.Inode {
+		head.Root = n.PrevSig
+		head.NextInd = nextInd
+		putBlockSig("head", marshal(head))
+	}
+
+	reply.Ack = true
+	reply.Pid = Merep.Pid
+	return nil
+}
+
 func NewServerConn(ip string, port int) *serverConn {
 	return &serverConn{port: port, Addr: ip + fmt.Sprintf(":%d", port)}
 }
 
-func (s serverConn) Call(str string, args interface{}, reply interface{}) {
+func (s *serverConn) Call(str string, args interface{}, reply interface{}) {
+	i := 0
 	for {
 		for s.conn == nil {
 			s.conn, _ = rpc.Dial("tcp", s.Addr)
+			if i > 50 {
+				return
+			}
+			i++
 		}
 
 		if err := s.conn.Call(str, args, reply); err == nil {
@@ -96,7 +194,12 @@ func ServeInterface(ip string, port int, arg interface{}) {
 	}
 	go func() {
 		for {
-			conn, _ := l.Accept()
+			conn, err := l.Accept()
+			if err != nil {
+				p_out("ERR: %s\n", err)
+				time.Sleep(time.Second)
+				continue
+			}
 			go rpc.ServeConn(conn)
 		}
 	}()
@@ -115,6 +218,7 @@ func sameNet(s1, s2 string) bool {
 }
 
 func LoadConfig(rstr, fname string) {
+	Clients = make(map[int]*serverConn)
 	rnames := strings.Split(rstr, ",")
 	myname, rnames := rnames[0], rnames[1:]
 
