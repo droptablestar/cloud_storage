@@ -1,4 +1,4 @@
-package main
+package dfs
 
 import (
 	"crypto/aes"
@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -24,6 +23,7 @@ const (
 
 var (
 	md5hash hash.Hash
+	AESkey  []byte
 )
 
 //=====================================================================
@@ -184,18 +184,6 @@ func aesDecrypt(key, ciphertext []byte) []byte {
 }
 
 //=====================================================================
-func p_err(s string, args ...interface{}) {
-	fmt.Printf(s, args...)
-}
-
-func p_dieif(b bool, s string, args ...interface{}) {
-	if b {
-		p_err(s, args...)
-		os.Exit(1)
-	}
-}
-
-//=====================================================================
 func usage() {
 	x := os.Args[0][:]
 	if i := strings.LastIndexByte(x, '/'); i >= 0 {
@@ -208,26 +196,26 @@ func usage() {
 	os.Exit(2)
 }
 
-func main() {
-	var err error
-	args := os.Args
-	num := len(args)
-	if num < 2 {
-		usage()
-	}
-	switch args[1] {
-	case "newkeypair":
-		if num != 3 {
-			usage()
-		}
-		err = mkKeyPair(args[2])
-	case "aes":
-		if num != 4 {
-			usage()
-		}
-		encryptStuff(args[2:])
-	}
-	if err != nil {
-		p_dieif(true, "FAIL: %q\n\t%s\n", strings.Join(args, " "))
-	}
-}
+// func main() {
+// 	var err error
+// 	args := os.Args
+// 	num := len(args)
+// 	if num < 2 {
+// 		usage()
+// 	}
+// 	switch args[1] {
+// 	case "newkeypair":
+// 		if num != 3 {
+// 			usage()
+// 		}
+// 		err = mkKeyPair(args[2])
+// 	case "aes":
+// 		if num != 4 {
+// 			usage()
+// 		}
+// 		encryptStuff(args[2:])
+// 	}
+// 	if err != nil {
+// 		p_dieif(true, "FAIL: %q\n\t%s\n", strings.Join(args, " "))
+// 	}
+// }

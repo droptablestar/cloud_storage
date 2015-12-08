@@ -1,7 +1,9 @@
 package main
 
 import (
-	"bitbucket.org/jreeseue/818/p4/dfs"
+	"bitbucket.org/jreeseue/818/p5/dfs"
+	"crypto/aes"
+	"crypto/rand"
 	"fmt"
 	. "github.com/mattn/go-getopt"
 	"os"
@@ -11,12 +13,13 @@ import (
 
 var newfs string
 var replicaString = "auto"
+var first = true
 
 func main() {
 	var c int
 
 	for {
-		if c = Getopt("ndtf:m:r:"); c == EOF {
+		if c = Getopt("ndta:f:m:r:"); c == EOF {
 			break
 		}
 
@@ -33,6 +36,8 @@ func main() {
 			dfs.ModeConsistency = OptArg
 		case 'r':
 			replicaString = OptArg
+		case 'a':
+			first = false
 		default:
 			println("usage: main.go [-n | -d | -f <flush dur> | -m <mode> | -r <rep string>]", c)
 			os.Exit(1)
@@ -41,6 +46,11 @@ func main() {
 	fmt.Printf("\nStartup up with debug %v, flush period %v, %smode: %q, replicaStr  %q token: %t\n\n",
 		dfs.Debug, dfs.FlusherPeriod, newfs, dfs.ModeConsistency, replicaString, dfs.Token)
 
+	if first {
+		dfs.AESkey = make([]byte, aes.BlockSize)
+		_, _ = rand.Read(dfs.AESkey[:])
+		fmt.Printf("session key: %s\n", dfs.AESkey)
+	}
 	dfs.LoadConfig(replicaString, "config.txt")
 	for _, r := range dfs.Replicas {
 		if r != dfs.Merep {
