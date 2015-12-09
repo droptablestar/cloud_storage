@@ -79,6 +79,12 @@ func (r *Request) String() string {
 	return fmt.Sprintf("Sig: [%s] Pid: %d\n", r.Sig, r.Pid)
 }
 
+type Message struct {
+	Req  []byte
+	Res  []byte
+	HMAC []byte
+}
+
 //=====================================================================
 // This is for the client.
 //=====================================================================
@@ -121,15 +127,12 @@ func (nd *Node) ReqDNode(encrypted *[]byte, res *[]byte) error {
 
 func (nd *Node) ReqData(encrypted *[]byte, res *[]byte) error {
 	r := accept_request(*encrypted)
-	p_out("r: %s\n", r)
+	p_out("r: %s\n", sha256bytesToString(*encrypted))
 	if b := getBlock(r.Sig); b != nil {
-		p_out("TRUE!")
 		*res = prepare_response(true, Merep.Pid, b, nil)
 	} else {
-		p_out("FALSE!")
 		*res = prepare_response(false, Merep.Pid, nil, nil)
 	}
-	p_out("FAIL! : [%s]\n", res)
 	return nil
 }
 

@@ -78,7 +78,6 @@ func main() {
 				test_str := dfs.AESDecrypt(dfs.AESkey, reply.Nonce)
 				var test_int int
 				json.Unmarshal(test_str, &test_int)
-				fmt.Printf("reply [%s] %d %d\n", dfs.AESkey, nonce, test_int)
 				if test_int != nonce {
 					fmt.Printf("Incorrect nonce!\n")
 					os.Exit(0)

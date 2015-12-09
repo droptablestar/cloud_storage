@@ -3,6 +3,7 @@ package dfs
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/rsa"
@@ -188,33 +189,68 @@ func AESDecrypt(key, ciphertext []byte) []byte {
 
 func prepare_response(ack bool, pid int, block []byte, dn *DNode) []byte {
 	res := Response{ack, pid, block, dn, nil, nil}
-	json_res := Marshal(res)
-	p_out("json_res: %s\n", json_res)
-	encrypted := aesEncrypt(AESkey, json_res)
-	return encrypted
+	encrypted := aesEncrypt(AESkey, Marshal(res))
+
+	mac := hmac.New(sha256.New, AESkey)
+	mac.Write(encrypted)
+
+	m := new(Message)
+	m.Res = encrypted
+	m.HMAC = mac.Sum(nil)
+
+	p_out("prepare_response: %s\n", sha256bytesToString(m.HMAC))
+	return aesEncrypt(AESkey, Marshal(m))
 }
 
 func prepare_request(sig string, pid int) []byte {
 	req := Request{sig, pid, 0}
-	json_req := Marshal(req)
-	p_out("json_req: %s\n", json_req)
-	encrypted := aesEncrypt(AESkey, json_req)
-	return encrypted
+	encrypted := aesEncrypt(AESkey, Marshal(req))
+
+	mac := hmac.New(sha256.New, AESkey)
+	mac.Write(encrypted)
+
+	m := new(Message)
+	m.Req = encrypted
+	m.HMAC = mac.Sum(nil)
+
+	p_out("prepare_request: %s\n", sha256bytesToString(m.HMAC))
+	return aesEncrypt(AESkey, Marshal(m))
 }
 
 func accept_response(encrypted []byte) *Response {
-	p_out("accept: %s\n", encrypted)
-	decrypted := AESDecrypt(AESkey, encrypted)
+	p_out("accept_response: %s\n", sha256bytesToString(encrypted))
+	decrypted_m := AESDecrypt(AESkey, encrypted)
+	p_out("accept_response: %s\n", decrypted_m)
+
+	m := new(Message)
+	_ = json.Unmarshal(decrypted_m, &m)
+	p_dieif(!CheckMAC(m.Res, m.HMAC, AESkey), "HMAC FAIL!\n")
+
 	res := new(Response)
-	_ = json.Unmarshal(decrypted, &res)
+	decrypted_r := AESDecrypt(AESkey, m.Res)
+	_ = json.Unmarshal(decrypted_r, &res)
 	return res
 }
 
 func accept_request(encrypted []byte) *Request {
+	p_out("accept_request: %s\n", sha256bytesToString(encrypted))
 	decrypted := AESDecrypt(AESkey, encrypted)
+
+	m := new(Message)
+	_ = json.Unmarshal(decrypted, &m)
+	p_dieif(!CheckMAC(m.Req, m.HMAC, AESkey), "HMAC FAIL!\n")
+
 	req := new(Request)
-	_ = json.Unmarshal(decrypted, &req)
+	decrypted_r := AESDecrypt(AESkey, m.Req)
+	_ = json.Unmarshal(decrypted_r, &req)
 	return req
+}
+
+func CheckMAC(message, messageMAC, key []byte) bool {
+	mac := hmac.New(sha256.New, key)
+	mac.Write(message)
+	expectedMAC := mac.Sum(nil)
+	return hmac.Equal(messageMAC, expectedMAC)
 }
 
 //=====================================================================

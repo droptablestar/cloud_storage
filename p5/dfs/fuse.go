@@ -222,7 +222,7 @@ func (n *DNode) readall() (b []byte) {
 			var enc_reply []byte
 			req := prepare_request(dblk, Merep.Pid)
 			Clients[n.Owner].Call("Node.ReqData", req, &enc_reply)
-			p_out("enc_reply: [%s]\n", enc_reply)
+			p_out("enc_reply: [%s]\n", sha256bytesToString(enc_reply))
 
 			reply := accept_response(enc_reply)
 			if reply.Ack {
