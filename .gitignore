@@ -1,5 +1,6 @@
 dss
-leveldb-master
-redis-3.0.4
+leveldb*
+redis*
 db
 *.zip
+quiz.txt
