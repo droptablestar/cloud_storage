@@ -4,6 +4,7 @@ import (
 	"bitbucket.org/jreeseue/818/p5/dfs"
 	"crypto/aes"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	. "github.com/mattn/go-getopt"
 	"os"
@@ -14,6 +15,7 @@ import (
 var newfs string
 var replicaString = "auto"
 var first = true
+var auth = ""
 
 func main() {
 	var c int
@@ -38,6 +40,7 @@ func main() {
 			replicaString = OptArg
 		case 'a':
 			first = false
+			auth = OptArg
 		default:
 			println("usage: main.go [-n | -d | -f <flush dur> | -m <mode> | -r <rep string>]", c)
 			os.Exit(1)
@@ -49,13 +52,38 @@ func main() {
 	if first {
 		dfs.AESkey = make([]byte, aes.BlockSize)
 		_, _ = rand.Read(dfs.AESkey[:])
-		fmt.Printf("session key: %s\n", dfs.AESkey)
+		fmt.Printf("session key: [%s]\n", dfs.AESkey)
 	}
 	dfs.LoadConfig(replicaString, "config.txt")
 	for _, r := range dfs.Replicas {
 		if r != dfs.Merep {
 			fmt.Printf("client r: %q\n", r)
 			dfs.Clients[r.Pid] = dfs.NewServerConn(r.Addr, r.Port)
+
+			// authenticate with auth server
+			if r.Name == auth {
+				// request
+				pub := dfs.ReadPublicKey(auth)
+				nonce, _ := rand.Read(make([]byte, aes.BlockSize))
+				var reply dfs.Response
+				req := &dfs.Request{dfs.Merep.Name, 0, nonce}
+				encrypted := dfs.RSAEncrypt(pub, dfs.Marshal(req))
+				dfs.Clients[r.Pid].Call("Node.Authenticate",
+					&encrypted, &reply)
+
+				// reply
+				private := dfs.ReadPrivateKey(dfs.Merep.Name)
+				AESkey := dfs.RSADecrypt(private, reply.AESkey)
+				json.Unmarshal(AESkey, &dfs.AESkey)
+				test_str := dfs.AESDecrypt(dfs.AESkey, reply.Nonce)
+				var test_int int
+				json.Unmarshal(test_str, &test_int)
+				fmt.Printf("reply [%s] %d %d\n", dfs.AESkey, nonce, test_int)
+				if test_int != nonce {
+					fmt.Printf("Incorrect nonce!\n")
+					os.Exit(0)
+				}
+			}
 		}
 	}
 	go func() {

@@ -1,3 +1,3 @@
-local1,12,dss1,dbdss1,127.0.0.1,6666
-local2,13,dss2,dbdss2,127.0.0.1,6667
+local1,12,/tmp/fsjosh1,/tmp/dbjosh1,127.0.0.1,6666
+local2,13,/tmp/fsjosh2,/tmp/dbjosh2,127.0.0.1,6667
 local3,14,dss3,dbdss3,127.0.0.1,6668

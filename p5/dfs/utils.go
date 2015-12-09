@@ -20,8 +20,10 @@ func findDNode(n *DNode) {
 		p_out("\nNEED TOKEN\n")
 		for _, c := range Clients {
 			p_out("Requesting token from %d\n", n.Owner)
-			var reply Response
-			c.Call("Node.ReqToken", &Request{"", Merep.Pid}, &reply)
+			var enc_reply []byte
+			req := prepare_request("", Merep.Pid)
+			c.Call("Node.ReqToken", req, &enc_reply)
+			reply := accept_response(enc_reply)
 			if reply.Ack {
 				Token = true
 				p_out("Got token from %d\n\n", n.Owner)

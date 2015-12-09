@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	KEY_PREFIX = "keys/"
 	PRI_SUFFIX = "_private.key"
 	PUB_SUFFIX = "_public.key"
 )
@@ -52,8 +53,8 @@ func mkKeyPair(name string) error {
 	p_dieif(err != nil, "private key create: %q", err)
 	publicKey := &privateKey.PublicKey
 
-	bytes2 := rsaEncrypt(publicKey, []byte("Keys verified"))
-	bytes3 := rsaDecrypt(privateKey, bytes2)
+	bytes2 := RSAEncrypt(publicKey, []byte("Keys verified"))
+	bytes3 := RSADecrypt(privateKey, bytes2)
 	p_err("rsa result: %q\n", string(bytes3))
 
 	// save keys
@@ -63,21 +64,23 @@ func mkKeyPair(name string) error {
 	return nil
 }
 
-func rsaEncrypt(pub *rsa.PublicKey, plain []byte) []byte {
+func RSAEncrypt(pub *rsa.PublicKey, plain []byte) []byte {
+	md5hash = md5.New()
 	cipher, err := rsa.EncryptOAEP(md5hash, rand.Reader, pub, plain, []byte(""))
 	p_dieif(err != nil, "RSA encrypt error: %q\n", string(plain))
 	return cipher
 }
 
-func rsaDecrypt(privateKey *rsa.PrivateKey, cipher []byte) []byte {
+func RSADecrypt(privateKey *rsa.PrivateKey, cipher []byte) []byte {
+	md5hash = md5.New()
 	plain, err := rsa.DecryptOAEP(md5hash, rand.Reader, privateKey, cipher, []byte(""))
 	p_dieif(err != nil, "RSA decrypt error: %v\n", cipher)
 	return plain
 }
 
 //=====================================================================
-func readPublicKey(fname string) *rsa.PublicKey {
-	fname = fname + PUB_SUFFIX
+func ReadPublicKey(fname string) *rsa.PublicKey {
+	fname = KEY_PREFIX + fname + PUB_SUFFIX
 	bytes, err := ioutil.ReadFile(fname)
 	if err != nil {
 		p_err("ERROR reading public key: %q\n", fname)
@@ -99,13 +102,13 @@ func writePublicKey(key *rsa.PublicKey, fname string) error {
 		return err
 	}
 	str := base64.StdEncoding.EncodeToString(bytes)
-	err = ioutil.WriteFile(fname+PUB_SUFFIX, []byte(str), 0644)
-	p_err("wrote %q\n", fname+PUB_SUFFIX)
+	err = ioutil.WriteFile(KEY_PREFIX+fname+PUB_SUFFIX, []byte(str), 0644)
+	p_err("wrote %q\n", KEY_PREFIX+fname+PUB_SUFFIX)
 	return err
 }
 
-func readPrivateKey(fname string) *rsa.PrivateKey {
-	fname = fname + PRI_SUFFIX
+func ReadPrivateKey(fname string) *rsa.PrivateKey {
+	fname = KEY_PREFIX + fname + PRI_SUFFIX
 	bytes, err := ioutil.ReadFile(fname)
 	if err != nil {
 		p_err("ERROR reading private key: %q\n", fname)
@@ -127,8 +130,8 @@ func writePrivateKey(key *rsa.PrivateKey, fname string) error {
 		return err
 	}
 	str := base64.StdEncoding.EncodeToString(bytes)
-	err = ioutil.WriteFile(fname+PRI_SUFFIX, []byte(str), 0644)
-	p_err("wrote %q\n", fname+PRI_SUFFIX)
+	err = ioutil.WriteFile(KEY_PREFIX+fname+PRI_SUFFIX, []byte(str), 0644)
+	p_err("wrote %q\n", KEY_PREFIX+fname+PRI_SUFFIX)
 	return err
 }
 
@@ -150,7 +153,7 @@ func encryptStuff(args []string) {
 	enc := aesEncrypt(key, data)
 	ioutil.WriteFile(outName+".encrypted", enc, 0644)
 
-	dec := aesDecrypt(key, enc)
+	dec := AESDecrypt(key, enc)
 	ioutil.WriteFile(outName+".decrypted", dec, 0644)
 
 	//	p_err("Verify that %q == %q\n", inName, outName+".decrypted")
@@ -174,13 +177,44 @@ func aesEncrypt(key, plaintext []byte) []byte {
 	return ciphertext
 }
 
-func aesDecrypt(key, ciphertext []byte) []byte {
+func AESDecrypt(key, ciphertext []byte) []byte {
 	aesBlock, err := aes.NewCipher(key)
 	p_dieif(err != nil, "new AES blockcipher: %q\n", err)
 	stream := cipher.NewCTR(aesBlock, ciphertext[:aes.BlockSize])
 
 	stream.XORKeyStream(ciphertext[aes.BlockSize:], ciphertext[aes.BlockSize:])
 	return ciphertext[aes.BlockSize:]
+}
+
+func prepare_response(ack bool, pid int, block []byte, dn *DNode) []byte {
+	res := Response{ack, pid, block, dn, nil, nil}
+	json_res := Marshal(res)
+	p_out("json_res: %s\n", json_res)
+	encrypted := aesEncrypt(AESkey, json_res)
+	return encrypted
+}
+
+func prepare_request(sig string, pid int) []byte {
+	req := Request{sig, pid, 0}
+	json_req := Marshal(req)
+	p_out("json_req: %s\n", json_req)
+	encrypted := aesEncrypt(AESkey, json_req)
+	return encrypted
+}
+
+func accept_response(encrypted []byte) *Response {
+	p_out("accept: %s\n", encrypted)
+	decrypted := AESDecrypt(AESkey, encrypted)
+	res := new(Response)
+	_ = json.Unmarshal(decrypted, &res)
+	return res
+}
+
+func accept_request(encrypted []byte) *Request {
+	decrypted := AESDecrypt(AESkey, encrypted)
+	req := new(Request)
+	_ = json.Unmarshal(decrypted, &req)
+	return req
 }
 
 //=====================================================================

@@ -1,6 +1,7 @@
 package dfs
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -56,10 +57,12 @@ func (n *Node) string() string {
 }
 
 type Response struct {
-	Ack   bool
-	Pid   int
-	Block []byte
-	DN    *DNode
+	Ack    bool
+	Pid    int
+	Block  []byte
+	DN     *DNode
+	AESkey []byte
+	Nonce  []byte
 }
 
 func (r *Response) String() string {
@@ -67,8 +70,9 @@ func (r *Response) String() string {
 }
 
 type Request struct {
-	Sig string
-	Pid int
+	Sig   string
+	Pid   int
+	Nonce int
 }
 
 func (r *Request) String() string {
@@ -78,14 +82,26 @@ func (r *Request) String() string {
 //=====================================================================
 // This is for the client.
 //=====================================================================
-func (nd *Node) ReqToken(r *Request, reply *Response) error {
+func (nd *Node) Authenticate(r *[]byte, reply *Response) error {
+	private := ReadPrivateKey(Merep.Name)
+	p_out("authenticating\n")
+	req := new(Request)
+	decrypted := RSADecrypt(private, *r)
+	json.Unmarshal(decrypted, &req)
+
+	pub := ReadPublicKey(req.Sig)
+	reply.AESkey = RSAEncrypt(pub, Marshal(AESkey))
+	reply.Nonce = aesEncrypt(AESkey, Marshal(req.Nonce))
+
+	return nil
+}
+
+func (nd *Node) ReqToken(encrypted *[]byte, res *[]byte) error {
 	if Token {
-		reply.Pid = Merep.Pid
-		reply.Ack = true
+		*res = prepare_response(true, Merep.Pid, nil, nil)
 		in()
 		flushRoot()
 		out()
-		p_out("Sending Token %d\n", r.Pid)
 		Token = false
 	} else {
 		p_out("I don't have the token (%d)\n", Merep.Pid)
@@ -94,35 +110,37 @@ func (nd *Node) ReqToken(r *Request, reply *Response) error {
 	return nil
 }
 
-func (nd *Node) ReqDNode(r *Request, reply *Response) error {
-	reply.Pid = Merep.Pid
+func (nd *Node) ReqDNode(encrypted *[]byte, res *[]byte) error {
+	p_out("\n\nREQUEST DNODE!\n\n")
+	r := accept_request(*encrypted)
 	n := getDNode(r.Sig)
-	reply.Ack = true
-	reply.DN = n
-	p_out("Sending DNode %s to %d\n", n.Name, r.Pid)
+	*res = prepare_response(true, Merep.Pid, nil, n)
 
 	return nil
 }
 
-func (nd *Node) ReqData(r *Request, reply *Response) error {
-	reply.Pid = Merep.Pid
+func (nd *Node) ReqData(encrypted *[]byte, res *[]byte) error {
+	r := accept_request(*encrypted)
+	p_out("r: %s\n", r)
 	if b := getBlock(r.Sig); b != nil {
-		reply.Ack = true
-		reply.Block = b
-		p_out("Sending block %s to %d\n", r.Sig, r.Pid)
+		p_out("TRUE!")
+		*res = prepare_response(true, Merep.Pid, b, nil)
 	} else {
-		reply.Ack = false
-		reply.Block = nil
+		p_out("FALSE!")
+		*res = prepare_response(false, Merep.Pid, nil, nil)
 	}
+	p_out("FAIL! : [%s]\n", res)
 	return nil
 }
 
-func (nd *Node) Receive(n DNode, reply *Response) error {
-	p_out("received %q from %d\n", &n, n.Owner)
+func (nd *Node) Receive(encrypted *[]byte, rep *[]byte) error {
+	decrypted := AESDecrypt(AESkey, *encrypted)
+	var n DNode
+	json.Unmarshal(decrypted, &n)
 	if n.Attrs.Atime.Before(root.Attrs.Atime.Add((1 * time.Millisecond))) {
 		return nil
 	}
-	n.PrevSig = putBlock(marshal(n))
+	n.PrevSig = putBlock(Marshal(n))
 	n.sig = n.PrevSig
 	n.metaDirty = false
 
@@ -139,25 +157,21 @@ func (nd *Node) Receive(n DNode, reply *Response) error {
 	}
 
 	if child, ok := nodeMap[n.Attrs.Inode]; ok { // in map
-		// p_out("overwriting child data %q\n", child)
 		*child = n
 		nodeMap[n.Attrs.Inode].ChildSigs = n.ChildSigs
 		nodeMap[n.Attrs.Inode].DataBlocks = n.DataBlocks
 	} else {
-		// p_out("overwriting %q\n", nodeMap[n.Attrs.Inode])
 		nodeMap[n.Attrs.Inode] = &n
 	}
 	nodeMap[n.Attrs.Inode].kids = make(map[string]*DNode)
-	p_out("new n = %q\n", nodeMap[n.Attrs.Inode])
 
 	if n.Attrs.Inode == root.Attrs.Inode {
 		head.Root = n.PrevSig
 		head.NextInd = nextInd
-		putBlockSig("head", marshal(head))
+		putBlockSig("head", Marshal(head))
 	}
+	*rep = prepare_response(true, Merep.Pid, nil, nil)
 
-	reply.Ack = true
-	reply.Pid = Merep.Pid
 	return nil
 }
 

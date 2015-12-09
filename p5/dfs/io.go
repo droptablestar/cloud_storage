@@ -112,7 +112,7 @@ func getBlock(key string) []byte {
 	return nil
 }
 
-func marshal(toMarshal interface{}) []byte {
+func Marshal(toMarshal interface{}) []byte {
 	if buf, err := json.MarshalIndent(toMarshal, "", " "); err == nil {
 		return buf
 	} else {
@@ -134,10 +134,11 @@ func getDNode(sig string) *DNode {
 
 func getRemoteDNode(owner int, name string) *DNode {
 	if owner != Merep.Pid {
-		var reply Response
 		p_out("Requesting DNODE: %s\n", name)
-		Clients[owner].Call("Node.ReqDNode",
-			&Request{name, Merep.Pid}, &reply)
+		var enc_reply []byte
+		req := prepare_request(name, Merep.Pid)
+		Clients[owner].Call("Node.ReqDNode", req, &enc_reply)
+		reply := accept_response(enc_reply)
 		if reply.DN != nil {
 			reply.DN.kids = make(map[string]*DNode)
 			return reply.DN
@@ -149,7 +150,6 @@ func getRemoteDNode(owner int, name string) *DNode {
 }
 
 func markDirty(n *DNode) {
-	p_out("MARK: %q\n", n)
 	var nd = n
 	for {
 		p, ok := nodeMap[nd.Parent]
@@ -161,15 +161,12 @@ func markDirty(n *DNode) {
 			p.metaDirty = true
 			p.kids[nd.Name] = nd
 			nd = p
-			p_out("MARK P: %q\n", p)
 		} else {
 			nd.parent.Attrs.Atime = time.Now()
 			nd.parent.metaDirty = true
 			nd = nd.parent
-			p_out("MARK N: %q\n", n.parent)
 		}
 	}
 	n.Attrs.Atime = time.Now()
 	n.metaDirty = true
-	p_out("MARKED: %q\n", n)
 }

@@ -107,7 +107,7 @@ func (n *DNode) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, err
 	d.init(req.Name, req.Mode)
 	d.Attrs.Uid = req.Header.Uid
 	d.Attrs.Gid = req.Header.Gid
-	d.sig = shaString(marshal(d))
+	d.sig = shaString(Marshal(d))
 	d.parent = n
 	d.Parent = n.Attrs.Inode
 
@@ -166,7 +166,7 @@ func (n *DNode) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.
 	// p_out("Create req: %q \nin %q\n\n", req, n)
 	f := new(DNode)
 	f.init(req.Name, req.Mode)
-	f.sig = shaString(marshal(f))
+	f.sig = shaString(Marshal(f))
 	f.parent = n
 	f.Parent = n.Attrs.Inode
 
@@ -219,9 +219,12 @@ func (n *DNode) readall() (b []byte) {
 	for _, dblk := range n.DataBlocks {
 		if n.Owner != Merep.Pid {
 			p_out("Requesting block %s from %d\n", dblk, n.Owner)
-			var reply Response
-			Clients[n.Owner].Call("Node.ReqData",
-				&Request{dblk, Merep.Pid}, &reply)
+			var enc_reply []byte
+			req := prepare_request(dblk, Merep.Pid)
+			Clients[n.Owner].Call("Node.ReqData", req, &enc_reply)
+			p_out("enc_reply: [%s]\n", enc_reply)
+
+			reply := accept_response(enc_reply)
 			if reply.Ack {
 				b = append(b, reply.Block...)
 			} else {
@@ -250,10 +253,9 @@ func (n *DNode) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 		n.Attrs.Mtime = time.Now()
 		n.DataBlocks = putBlocks(n.data)
 		n.Owner = Merep.Pid
-		n.sig = shaString(marshal(n))
+		n.sig = shaString(Marshal(n))
 
 		n.dirty = false
-		p_out("DIRTY: %q\n", n)
 	}
 	out()
 	return nil
