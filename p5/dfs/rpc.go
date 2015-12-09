@@ -111,6 +111,7 @@ func (nd *Node) ReqToken(encrypted *[]byte, res *[]byte) error {
 		Token = false
 	} else {
 		p_out("I don't have the token (%d)\n", Merep.Pid)
+		*res = prepare_response(false, Merep.Pid, nil, nil)
 	}
 
 	return nil
